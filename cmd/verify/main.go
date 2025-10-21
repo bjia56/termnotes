@@ -10,7 +10,7 @@ import (
 
 // This program demonstrates all the features of termnotes programmatically
 func main() {
-	fmt.Println("=== TermNotes Feature Demonstration ===\n")
+	fmt.Println("=== TermNotes Feature Demonstration ===")
 
 	// Create a test backend
 	tmpDir := os.TempDir()
@@ -30,7 +30,8 @@ func main() {
 		panic(err)
 	}
 	defer store.Close()
-	fmt.Println("   ✓ Store initialized\n")
+	fmt.Println("   ✓ Store initialized")
+	fmt.Println()
 
 	fmt.Println("3. Creating notes...")
 	note1, err := store.CreateNote("First Note", "This is my **first** note with markdown!")
