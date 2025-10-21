@@ -7,7 +7,7 @@
 *.dll
 *.so
 *.dylib
-termnotes
+/termnotes
 
 # Test binary, built with `go test -c`
 *.test
