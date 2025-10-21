@@ -12,7 +12,7 @@ func main() {
 	// Create a demo notes file
 	homeDir, _ := os.UserHomeDir()
 	demoPath := filepath.Join(homeDir, ".termnotes", "notes.json")
-	
+
 	backend, err := storage.NewFileSystemBackend(demoPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)

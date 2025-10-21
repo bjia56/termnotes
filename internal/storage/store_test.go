@@ -78,7 +78,7 @@ func TestStore(t *testing.T) {
 func TestPersistence(t *testing.T) {
 	tmpDir := t.TempDir()
 	backendPath := filepath.Join(tmpDir, "persistent_notes.json")
-	
+
 	// Create and populate store
 	backend1, err := NewFileSystemBackend(backendPath)
 	if err != nil {
