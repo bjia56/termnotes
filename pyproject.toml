@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "termnotes"
+version = "0.1.0"
+description = "A vim-like text editor in your terminal"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+dependencies = [
+    "prompt_toolkit>=3.0.0",
+]
+
+[project.scripts]
+termnotes = "termnotes.__main__:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+]
