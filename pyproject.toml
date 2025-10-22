@@ -1,0 +1,17 @@
+[project]
+name = "termnotes"
+version = "0.1.0"
+description = "A note taker in your terminal"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "prompt_toolkit>=3.0.0",
+    "pygments>=2.0.0",
+]
+
+[project.scripts]
+termnotes = "termnotes.main:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
