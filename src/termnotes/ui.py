@@ -18,7 +18,7 @@ from .modes import ModeManager
 from .key_bindings import create_key_bindings
 from .note_list import NoteListManager
 from .focus import FocusManager
-from .storage import NoteStorage
+from .storage import create_default_storage
 from .note import Note
 
 
@@ -27,7 +27,7 @@ class EditorUI:
 
     def __init__(self, initial_text: str = ""):
         # Core components
-        self.storage = NoteStorage()  # In-memory SQLite database
+        self.storage = create_default_storage()  # Composite: SQLite cache + filesystem
         self.buffer = EditorBuffer(initial_text)
         self.mode_manager = ModeManager()
         self.note_list_manager = NoteListManager(self.storage)

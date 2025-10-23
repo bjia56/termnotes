@@ -222,6 +222,12 @@ def create_key_bindings(
         """Delete character before cursor in insert mode"""
         buffer.backspace()
 
+    @kb.add('tab', filter=is_editor_focused & is_insert_mode)
+    def insert_tab(event):
+        """Insert tab as 4 spaces in insert mode"""
+        for _ in range(4):
+            buffer.insert_char(' ')
+
     # Arrow keys in insert mode
     @kb.add('left', filter=is_editor_focused & is_insert_mode)
     def insert_move_left(event):

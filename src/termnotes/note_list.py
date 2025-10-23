@@ -4,18 +4,18 @@ Note list management
 
 from typing import List, Optional
 from .note import Note
-from .storage import NoteStorage
+from .storage import StorageBackend
 
 
 class NoteListManager:
     """Manages a list of notes and selection state"""
 
-    def __init__(self, storage: NoteStorage):
+    def __init__(self, storage: StorageBackend):
         """
         Initialize note list manager
 
         Args:
-            storage: NoteStorage instance for persistence
+            storage: StorageBackend instance for persistence
         """
         self.storage = storage
         self.notes: List[Note] = []

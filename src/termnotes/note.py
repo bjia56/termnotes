@@ -2,20 +2,33 @@
 Note data model
 """
 
+from typing import Optional
+from datetime import datetime
+
 
 class Note:
     """Represents a single note"""
 
-    def __init__(self, note_id: str, content: str = ""):
+    def __init__(
+        self,
+        note_id: str,
+        content: str = "",
+        created_at: Optional[datetime] = None,
+        updated_at: Optional[datetime] = None
+    ):
         """
         Initialize a note
 
         Args:
             note_id: Unique identifier for the note
             content: Full content of the note
+            created_at: When the note was created (optional)
+            updated_at: When the note was last updated (optional)
         """
         self.id = note_id
         self.content = content
+        self.created_at = created_at or datetime.now()
+        self.updated_at = updated_at or datetime.now()
 
     def get_preview(self, max_length: int = 25) -> str:
         """
