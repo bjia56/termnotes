@@ -47,7 +47,7 @@ jobs:
             MODULE_PATH=$(python -c "import os, $MODULE; print(os.path.dirname($MODULE.__file__))")
             python scripts/add_dir_into_zip.py "$MODULE_PATH" ./python.exe Lib/site-packages/"$MODULE"
 
-            DISTINFO_FOLDER_PATH=${MODULE_PATH}*.dist-info
+            DISTINFO_FOLDER_PATH=$(echo $MODULE_PATH*.dist-info)
             python scripts/add_dir_into_zip.py "$DISTINFO_FOLDER_PATH" ./python.exe Lib/site-packages/$(basename "$DISTINFO_FOLDER_PATH")
           done
 
