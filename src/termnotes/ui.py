@@ -2,10 +2,16 @@
 UI components using prompt_toolkit
 """
 
+import re
 from prompt_toolkit.application import Application
 from prompt_toolkit.layout import Layout, HSplit, VSplit, Window, FormattedTextControl
 from prompt_toolkit.formatted_text import FormattedText
 from prompt_toolkit.key_binding import KeyBindings
+from pygments import lex
+from pygments.lexers import get_lexer_by_name
+from pygments.lexers.special import TextLexer
+from pygments.util import ClassNotFound
+from pygments.token import Token
 
 from .editor import EditorBuffer
 from .modes import ModeManager
@@ -94,19 +100,242 @@ class EditorUI:
         # Only show cursor if editor is focused
         show_cursor = self.focus_manager.is_editor_focused()
 
-        for i, line in enumerate(lines):
-            if i == self.buffer.cursor_row and show_cursor:
-                # Current line - show cursor (only when editor focused)
-                line_with_cursor = self._add_cursor_to_line(line, self.buffer.cursor_col)
-                result.extend(line_with_cursor)
-            else:
-                result.append(('', line))
+        # First pass: identify code blocks
+        code_blocks = self._identify_code_blocks(lines)
 
-            # Add newline for all but last line
-            if i < len(lines) - 1:
-                result.append(('', '\n'))
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+
+            # Check if this line is part of a code block
+            if i in code_blocks:
+                block_info = code_blocks[i]
+                start_line = block_info['start']
+                end_line = block_info['end']
+                lang = block_info['lang']
+
+                # Process the entire code block
+                for block_i in range(start_line, end_line + 1):
+                    block_line = lines[block_i]
+
+                    if block_i == start_line or block_i == end_line:
+                        # Opening/closing backticks
+                        formatted_line = [('#ansigreen', block_line)]
+                    else:
+                        # Code content - use Pygments
+                        formatted_line = self._highlight_code_line(block_line, lang)
+
+                    # Add cursor if needed
+                    if block_i == self.buffer.cursor_row and show_cursor:
+                        line_with_cursor = self._add_cursor_to_formatted_line(formatted_line, self.buffer.cursor_col)
+                        result.extend(line_with_cursor)
+                    else:
+                        result.extend(formatted_line)
+
+                    # Add newline for all but last line
+                    if block_i < len(lines) - 1:
+                        result.append(('', '\n'))
+
+                # Skip to end of code block
+                i = end_line + 1
+            else:
+                # Regular markdown line
+                formatted_line = self._parse_markdown_line(line)
+
+                if i == self.buffer.cursor_row and show_cursor:
+                    line_with_cursor = self._add_cursor_to_formatted_line(formatted_line, self.buffer.cursor_col)
+                    result.extend(line_with_cursor)
+                else:
+                    result.extend(formatted_line)
+
+                # Add newline for all but last line
+                if i < len(lines) - 1:
+                    result.append(('', '\n'))
+
+                i += 1
 
         return FormattedText(result)
+
+    def _identify_code_blocks(self, lines):
+        """
+        Identify code blocks in the text
+        Returns a dict mapping line numbers to code block info
+        """
+        code_blocks = {}
+        in_code_block = False
+        block_start = None
+        block_lang = None
+
+        for i, line in enumerate(lines):
+            if line.strip().startswith('```'):
+                if not in_code_block:
+                    # Start of code block
+                    in_code_block = True
+                    block_start = i
+                    # Extract language if specified
+                    lang_match = re.match(r'^```(\w+)', line.strip())
+                    block_lang = lang_match.group(1) if lang_match else None
+                else:
+                    # End of code block
+                    block_end = i
+                    # Mark all lines in the block
+                    for block_i in range(block_start, block_end + 1):
+                        code_blocks[block_i] = {
+                            'start': block_start,
+                            'end': block_end,
+                            'lang': block_lang
+                        }
+                    in_code_block = False
+                    block_start = None
+                    block_lang = None
+
+        return code_blocks
+
+    def _highlight_code_line(self, line: str, lang: str = None):
+        """
+        Highlight a single line of code using Pygments
+        Returns a list of (style, text) tuples
+        """
+        if not line:
+            return [('', '')]
+
+        # Get lexer
+        try:
+            if lang:
+                lexer = get_lexer_by_name(lang)
+            else:
+                lexer = TextLexer()
+        except ClassNotFound:
+            lexer = TextLexer()
+
+        # Tokenize the line
+        tokens = list(lex(line, lexer))
+
+        # Map Pygments tokens to prompt_toolkit styles
+        # Filter out newline tokens that Pygments adds
+        result = []
+        for token_type, text in tokens:
+            # Skip any whitespace-only tokens that contain newlines
+            if '\n' in text:
+                # Replace newlines but keep other content
+                text = text.replace('\n', '')
+                if not text:  # If nothing left after removing newlines, skip
+                    continue
+            style = self._pygments_token_to_style(token_type)
+            result.append((style, text))
+
+        # If result is empty (line was only whitespace/newlines), return empty string
+        if not result:
+            return [('', '')]
+
+        return result
+
+    def _pygments_token_to_style(self, token_type):
+        """Map Pygments token types to prompt_toolkit style strings"""
+        # Map common token types to ANSI colors
+        if token_type in Token.Keyword:
+            return '#ansicyan bold'
+        elif token_type in Token.String:
+            return '#ansigreen'
+        elif token_type in Token.Comment:
+            return '#ansibrightblack italic'
+        elif token_type in Token.Number:
+            return '#ansiyellow'
+        elif token_type in Token.Name.Function:
+            return '#ansiblue'
+        elif token_type in Token.Name.Class:
+            return '#ansimagenta bold'
+        elif token_type in Token.Operator:
+            return '#ansired'
+        elif token_type in Token.Name.Builtin:
+            return '#ansicyan'
+        else:
+            return ''  # Default style
+
+    def _parse_markdown_line(self, line: str):
+        """
+        Parse a line for markdown syntax and return formatted text segments
+        Returns a list of (style, text) tuples
+        """
+        # Check for headers first (must be at start of line)
+        header_match = re.match(r'^(#{1,6})\s+(.*)$', line)
+        if header_match:
+            hashes, text = header_match.groups()
+            level = len(hashes)
+            return [('#ansicyan bold', hashes), ('', ' '), ('#ansicyan bold', text)]
+
+        # Check for code blocks (triple backticks)
+        if line.strip().startswith('```'):
+            return [('#ansigreen', line)]
+
+        # Check for blockquotes
+        if line.strip().startswith('>'):
+            return [('#ansiyellow', line)]
+
+        # Check for unordered lists
+        if re.match(r'^\s*[-*+]\s+', line):
+            match = re.match(r'^(\s*[-*+]\s+)(.*)$', line)
+            if match:
+                bullet, rest = match.groups()
+                result = [('#ansimagenta bold', bullet)]
+                result.extend(self._parse_inline_markdown(rest))
+                return result
+
+        # Check for ordered lists
+        if re.match(r'^\s*\d+\.\s+', line):
+            match = re.match(r'^(\s*\d+\.\s+)(.*)$', line)
+            if match:
+                number, rest = match.groups()
+                result = [('#ansimagenta bold', number)]
+                result.extend(self._parse_inline_markdown(rest))
+                return result
+
+        # Check for horizontal rules
+        if re.match(r'^\s*[-*_]{3,}\s*$', line):
+            return [('#ansicyan', line)]
+
+        # Otherwise parse inline markdown
+        return self._parse_inline_markdown(line)
+
+    def _parse_inline_markdown(self, text: str):
+        """
+        Parse inline markdown elements (bold, italic, code, links)
+        Returns a list of (style, text) tuples
+        """
+        result = []
+        pos = 0
+
+        # Pattern for inline code, bold, italic, and links
+        # Order matters: try more specific patterns first
+        patterns = [
+            (r'`([^`]+)`', '#ansigreen'),           # Inline code
+            (r'\*\*\*([^*]+)\*\*\*', '#ansired bold italic'),  # Bold+italic
+            (r'___([^_]+)___', '#ansired bold italic'),        # Bold+italic
+            (r'\*\*([^*]+)\*\*', '#ansired bold'),  # Bold
+            (r'__([^_]+)__', '#ansired bold'),      # Bold
+            (r'\*([^*]+)\*', '#ansired italic'),    # Italic
+            (r'_([^_]+)_', '#ansired italic'),      # Italic
+            (r'\[([^\]]+)\]\([^)]+\)', '#ansiblue underline'),  # Links
+        ]
+
+        while pos < len(text):
+            # Try to match any pattern at current position
+            matched = False
+            for pattern, style in patterns:
+                match = re.match(pattern, text[pos:])
+                if match:
+                    full_text = match.group(0)
+                    result.append((style, full_text))
+                    pos += len(full_text)
+                    matched = True
+                    break
+
+            if not matched:
+                # No pattern matched, add single character as normal text
+                result.append(('', text[pos]))
+                pos += 1
+
+        return result
 
     def _add_cursor_to_line(self, line: str, cursor_col: int):
         """Add cursor to a line at specified column"""
@@ -123,6 +352,47 @@ class EditorUI:
             result.append(('reverse', line[cursor_col]))  # Reversed character
             if cursor_col < len(line) - 1:
                 result.append(('', line[cursor_col + 1:]))
+
+        return result
+
+    def _add_cursor_to_formatted_line(self, formatted_segments, cursor_col: int):
+        """
+        Add cursor to an already-formatted line at specified column
+        formatted_segments: list of (style, text) tuples
+        cursor_col: character position where cursor should appear
+        """
+        result = []
+        char_pos = 0
+        cursor_added = False
+
+        for style, text in formatted_segments:
+            text_len = len(text)
+
+            if cursor_added or cursor_col < char_pos or cursor_col >= char_pos + text_len:
+                # Cursor not in this segment
+                result.append((style, text))
+                char_pos += text_len
+            else:
+                # Cursor is in this segment
+                offset = cursor_col - char_pos
+
+                # Add text before cursor
+                if offset > 0:
+                    result.append((style, text[:offset]))
+
+                # Add cursor character
+                result.append(('reverse', text[offset]))
+
+                # Add text after cursor
+                if offset < text_len - 1:
+                    result.append((style, text[offset + 1:]))
+
+                cursor_added = True
+                char_pos += text_len
+
+        # If cursor is at end of line, add a reversed space
+        if not cursor_added:
+            result.append(('reverse', ' '))
 
         return result
 
