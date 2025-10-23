@@ -33,6 +33,7 @@ class EditorUI:
         self.note_list_manager = NoteListManager(self.storage)
         self.focus_manager = FocusManager()
         self.pending_note_switch = None  # For handling unsaved changes confirmation
+        self.editor_window_height = 24  # Default, will be updated dynamically
 
         # Load first note into editor if no initial text
         if not initial_text and self.note_list_manager.selected_note:
@@ -94,31 +95,42 @@ class EditorUI:
 
     def get_text_content(self):
         """Get formatted text content for the editor window"""
+        # Update window height on each render to handle terminal resizing
+        self.update_editor_window_height()
+
         lines = self.buffer.get_display_lines()
         result = []
 
         # Only show cursor if editor is focused
         show_cursor = self.focus_manager.is_editor_focused()
 
+        # Calculate visible line range based on scroll offset
+        visible_start = self.buffer.scroll_offset
+        visible_end = min(visible_start + self.editor_window_height, len(lines))
+
         # First pass: identify code blocks
         code_blocks = self._identify_code_blocks(lines)
 
-        i = 0
-        while i < len(lines):
+        i = visible_start
+        while i < visible_end:
             line = lines[i]
 
             # Check if this line is part of a code block
             if i in code_blocks:
                 block_info = code_blocks[i]
-                start_line = block_info['start']
-                end_line = block_info['end']
+                block_start = block_info['start']
+                block_end = block_info['end']
                 lang = block_info['lang']
 
-                # Process the entire code block
-                for block_i in range(start_line, end_line + 1):
+                # Process the entire code block (but only visible parts)
+                for block_i in range(block_start, block_end + 1):
+                    # Skip lines outside visible range
+                    if block_i < visible_start or block_i >= visible_end:
+                        continue
+
                     block_line = lines[block_i]
 
-                    if block_i == start_line or block_i == end_line:
+                    if block_i == block_start or block_i == block_end:
                         # Opening/closing backticks
                         formatted_line = [('#ansigreen', block_line)]
                     else:
@@ -132,12 +144,12 @@ class EditorUI:
                     else:
                         result.extend(formatted_line)
 
-                    # Add newline for all but last line
-                    if block_i < len(lines) - 1:
+                    # Add newline for all but last visible line
+                    if block_i < visible_end - 1:
                         result.append(('', '\n'))
 
                 # Skip to end of code block
-                i = end_line + 1
+                i = block_end + 1
             else:
                 # Regular markdown line
                 formatted_line = self._parse_markdown_line(line)
@@ -148,8 +160,8 @@ class EditorUI:
                 else:
                     result.extend(formatted_line)
 
-                # Add newline for all but last line
-                if i < len(lines) - 1:
+                # Add newline for all but last visible line
+                if i < visible_end - 1:
                     result.append(('', '\n'))
 
                 i += 1
@@ -462,8 +474,21 @@ class EditorUI:
 
         return FormattedText([('reverse', status)])
 
+    def update_editor_window_height(self):
+        """Update the cached editor window height based on terminal size"""
+        try:
+            import shutil
+            terminal_height = shutil.get_terminal_size().lines
+            # Subtract status bar (1 line)
+            self.editor_window_height = max(1, terminal_height - 1)
+        except:
+            self.editor_window_height = 24  # Default fallback
+
     def create_layout(self):
         """Create the UI layout with sidebar and editor"""
+        # Update window height when creating layout
+        self.update_editor_window_height()
+
         # Sidebar window (note list)
         sidebar_window = Window(
             content=FormattedTextControl(

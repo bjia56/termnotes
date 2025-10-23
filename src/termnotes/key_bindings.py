@@ -65,14 +65,14 @@ def create_key_bindings(
     @kb.add('down', filter=is_editor_focused & is_normal_mode & ~is_command_mode)
     def move_down(event):
         """Move cursor down in normal mode"""
-        buffer.move_cursor_down()
+        buffer.move_cursor_down(ui.editor_window_height)
         mode_manager.clear_command_buffer()
 
     @kb.add('k', filter=is_editor_focused & is_normal_mode & ~is_command_mode)
     @kb.add('up', filter=is_editor_focused & is_normal_mode & ~is_command_mode)
     def move_up(event):
         """Move cursor up in normal mode"""
-        buffer.move_cursor_up()
+        buffer.move_cursor_up(ui.editor_window_height)
         mode_manager.clear_command_buffer()
 
     @kb.add('l', filter=is_editor_focused & is_normal_mode & ~is_command_mode)
@@ -94,6 +94,30 @@ def create_key_bindings(
         buffer.move_cursor_to_line_end()
         mode_manager.clear_command_buffer()
 
+    @kb.add('c-d', filter=is_editor_focused & is_normal_mode & ~is_command_mode)
+    def half_page_down(event):
+        """Scroll down half a page"""
+        buffer.half_page_down(ui.editor_window_height)
+        mode_manager.clear_command_buffer()
+
+    @kb.add('c-u', filter=is_editor_focused & is_normal_mode & ~is_command_mode)
+    def half_page_up(event):
+        """Scroll up half a page"""
+        buffer.half_page_up(ui.editor_window_height)
+        mode_manager.clear_command_buffer()
+
+    @kb.add('pagedown', filter=is_editor_focused & is_normal_mode & ~is_command_mode)
+    def page_down_key(event):
+        """Scroll down one page"""
+        buffer.page_down(ui.editor_window_height)
+        mode_manager.clear_command_buffer()
+
+    @kb.add('pageup', filter=is_editor_focused & is_normal_mode & ~is_command_mode)
+    def page_up_key(event):
+        """Scroll up one page"""
+        buffer.page_up(ui.editor_window_height)
+        mode_manager.clear_command_buffer()
+
     @kb.add('i', filter=is_editor_focused & is_normal_mode & ~is_command_mode)
     def enter_insert_mode(event):
         """Enter insert mode"""
@@ -110,14 +134,14 @@ def create_key_bindings(
     @kb.add('o', filter=is_editor_focused & is_normal_mode & ~is_command_mode)
     def open_line_below(event):
         """Open new line below and enter insert mode"""
-        buffer.insert_line_below()
+        buffer.insert_line_below(ui.editor_window_height)
         mode_manager.enter_insert_mode()
         mode_manager.clear_command_buffer()
 
     @kb.add('O', filter=is_editor_focused & is_normal_mode & ~is_command_mode)
     def open_line_above(event):
         """Open new line above and enter insert mode"""
-        buffer.insert_line_above()
+        buffer.insert_line_above(ui.editor_window_height)
         mode_manager.enter_insert_mode()
         mode_manager.clear_command_buffer()
 
@@ -215,7 +239,7 @@ def create_key_bindings(
     @kb.add('enter', filter=is_editor_focused & is_insert_mode)
     def insert_newline(event):
         """Insert new line in insert mode"""
-        buffer.insert_newline()
+        buffer.insert_newline(ui.editor_window_height)
 
     @kb.add('backspace', filter=is_editor_focused & is_insert_mode)
     def backspace_char(event):
@@ -242,12 +266,12 @@ def create_key_bindings(
     @kb.add('up', filter=is_editor_focused & is_insert_mode)
     def insert_move_up(event):
         """Move cursor up in insert mode"""
-        buffer.move_cursor_up()
+        buffer.move_cursor_up(ui.editor_window_height)
 
     @kb.add('down', filter=is_editor_focused & is_insert_mode)
     def insert_move_down(event):
         """Move cursor down in insert mode"""
-        buffer.move_cursor_down()
+        buffer.move_cursor_down(ui.editor_window_height)
 
     # Catch all printable characters in insert mode
     @kb.add('<any>', filter=is_editor_focused & is_insert_mode)

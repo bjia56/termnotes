@@ -24,6 +24,7 @@ class EditorBuffer:
 
         self.cursor_row: int = 0
         self.cursor_col: int = 0
+        self.scroll_offset: int = 0  # Top line currently displayed
         self.is_dirty: bool = False  # Track if buffer has unsaved changes
         self.current_note_id: str = None  # Track which note is currently loaded
 
@@ -44,6 +45,27 @@ class EditorBuffer:
     def get_display_lines(self) -> List[str]:
         """Get lines for display"""
         return self.lines.copy()
+
+    def adjust_scroll(self, visible_height: int):
+        """
+        Adjust scroll offset to keep cursor visible within the window.
+
+        Args:
+            visible_height: Number of lines visible in the editor window
+        """
+        if visible_height <= 0:
+            return
+
+        # Scroll down if cursor is below visible area
+        if self.cursor_row >= self.scroll_offset + visible_height:
+            self.scroll_offset = self.cursor_row - visible_height + 1
+
+        # Scroll up if cursor is above visible area
+        if self.cursor_row < self.scroll_offset:
+            self.scroll_offset = self.cursor_row
+
+        # Ensure scroll_offset is non-negative
+        self.scroll_offset = max(0, self.scroll_offset)
 
     def mark_dirty(self):
         """Mark buffer as having unsaved changes"""
@@ -68,6 +90,7 @@ class EditorBuffer:
 
         self.cursor_row = 0
         self.cursor_col = 0
+        self.scroll_offset = 0
         self.current_note_id = note_id
         self.is_dirty = False
 
@@ -82,19 +105,25 @@ class EditorBuffer:
         if self.cursor_col < len(self.current_line):
             self.cursor_col += 1
 
-    def move_cursor_up(self):
+    def move_cursor_up(self, visible_height: int = None):
         """Move cursor up"""
         if self.cursor_row > 0:
             self.cursor_row -= 1
             # Adjust column if necessary
             self.cursor_col = min(self.cursor_col, len(self.current_line))
+            # Adjust scroll if visible_height provided
+            if visible_height is not None:
+                self.adjust_scroll(visible_height)
 
-    def move_cursor_down(self):
+    def move_cursor_down(self, visible_height: int = None):
         """Move cursor down"""
         if self.cursor_row < len(self.lines) - 1:
             self.cursor_row += 1
             # Adjust column if necessary
             self.cursor_col = min(self.cursor_col, len(self.current_line))
+            # Adjust scroll if visible_height provided
+            if visible_height is not None:
+                self.adjust_scroll(visible_height)
 
     def move_cursor_to_line_start(self):
         """Move cursor to start of line"""
@@ -103,6 +132,116 @@ class EditorBuffer:
     def move_cursor_to_line_end(self):
         """Move cursor to end of line"""
         self.cursor_col = len(self.current_line)
+
+    def page_down(self, visible_height: int):
+        """Move cursor down by one page (vim Ctrl+F behavior)"""
+        if visible_height <= 0:
+            return
+
+        # Calculate cursor's current position relative to top of screen
+        relative_pos = self.cursor_row - self.scroll_offset
+
+        # Calculate new scroll offset
+        new_scroll_offset = min(self.scroll_offset + visible_height,
+                                max(0, len(self.lines) - visible_height))
+
+        # Check if we're at the bottom (can't scroll further)
+        if new_scroll_offset == self.scroll_offset and self.scroll_offset == max(0, len(self.lines) - visible_height):
+            # Already at bottom, move cursor to last line
+            self.cursor_row = len(self.lines) - 1
+        else:
+            # Normal scroll: update offset and try to keep relative position
+            self.scroll_offset = new_scroll_offset
+            new_row = self.scroll_offset + relative_pos
+            # Clamp to valid range
+            new_row = min(new_row, len(self.lines) - 1)
+            new_row = max(new_row, self.scroll_offset)
+            self.cursor_row = new_row
+
+        # Adjust column if necessary
+        self.cursor_col = min(self.cursor_col, len(self.current_line))
+
+    def page_up(self, visible_height: int):
+        """Move cursor up by one page (vim Ctrl+B behavior)"""
+        if visible_height <= 0:
+            return
+
+        # Calculate cursor's current position relative to top of screen
+        relative_pos = self.cursor_row - self.scroll_offset
+
+        # Calculate new scroll offset
+        new_scroll_offset = max(self.scroll_offset - visible_height, 0)
+
+        # Check if we're at the top (can't scroll further)
+        if new_scroll_offset == self.scroll_offset and self.scroll_offset == 0:
+            # Already at top, move cursor to first line
+            self.cursor_row = 0
+        else:
+            # Normal scroll: update offset and try to keep relative position
+            self.scroll_offset = new_scroll_offset
+            new_row = self.scroll_offset + relative_pos
+            # Clamp to valid range
+            new_row = max(new_row, 0)
+            new_row = min(new_row, self.scroll_offset + visible_height - 1)
+            self.cursor_row = new_row
+
+        # Adjust column if necessary
+        self.cursor_col = min(self.cursor_col, len(self.current_line))
+
+    def half_page_down(self, visible_height: int):
+        """Move cursor down by half a page (vim Ctrl+D)"""
+        if visible_height <= 0:
+            return
+
+        half_page = max(1, visible_height // 2)
+
+        # Calculate new positions
+        new_row = min(self.cursor_row + half_page, len(self.lines) - 1)
+        new_scroll_offset = min(self.scroll_offset + half_page,
+                                max(0, len(self.lines) - visible_height))
+
+        # Check if we've reached the bottom
+        if new_row == len(self.lines) - 1 and self.cursor_row == len(self.lines) - 1:
+            # Already at last line, do nothing more
+            pass
+        elif new_row == len(self.lines) - 1:
+            # Moving to last line for the first time
+            self.cursor_row = new_row
+            self.scroll_offset = new_scroll_offset
+        else:
+            # Normal scroll
+            self.cursor_row = new_row
+            self.scroll_offset = new_scroll_offset
+
+        # Adjust column if necessary
+        self.cursor_col = min(self.cursor_col, len(self.current_line))
+
+    def half_page_up(self, visible_height: int):
+        """Move cursor up by half a page (vim Ctrl+U)"""
+        if visible_height <= 0:
+            return
+
+        half_page = max(1, visible_height // 2)
+
+        # Calculate new positions
+        new_row = max(self.cursor_row - half_page, 0)
+        new_scroll_offset = max(self.scroll_offset - half_page, 0)
+
+        # Check if we've reached the top
+        if new_row == 0 and self.cursor_row == 0:
+            # Already at first line, do nothing more
+            pass
+        elif new_row == 0:
+            # Moving to first line for the first time
+            self.cursor_row = new_row
+            self.scroll_offset = new_scroll_offset
+        else:
+            # Normal scroll
+            self.cursor_row = new_row
+            self.scroll_offset = new_scroll_offset
+
+        # Adjust column if necessary
+        self.cursor_col = min(self.cursor_col, len(self.current_line))
 
     # Text modification
     def insert_char(self, char: str):
@@ -142,7 +281,7 @@ class EditorBuffer:
             self.cursor_row -= 1
             self.mark_dirty()
 
-    def insert_newline(self):
+    def insert_newline(self, visible_height: int = None):
         """Insert a new line at cursor position"""
         line = self.lines[self.cursor_row]
         # Split current line at cursor
@@ -151,6 +290,9 @@ class EditorBuffer:
         self.cursor_row += 1
         self.cursor_col = 0
         self.mark_dirty()
+        # Adjust scroll if visible_height provided
+        if visible_height is not None:
+            self.adjust_scroll(visible_height)
 
     def delete_line(self):
         """Delete current line"""
@@ -166,15 +308,21 @@ class EditorBuffer:
             self.cursor_col = 0
         self.mark_dirty()
 
-    def insert_line_below(self):
+    def insert_line_below(self, visible_height: int = None):
         """Insert a new empty line below current line"""
         self.lines.insert(self.cursor_row + 1, "")
         self.cursor_row += 1
         self.cursor_col = 0
         self.mark_dirty()
+        # Adjust scroll if visible_height provided
+        if visible_height is not None:
+            self.adjust_scroll(visible_height)
 
-    def insert_line_above(self):
+    def insert_line_above(self, visible_height: int = None):
         """Insert a new empty line above current line"""
         self.lines.insert(self.cursor_row, "")
         self.cursor_col = 0
         self.mark_dirty()
+        # Adjust scroll if visible_height provided (cursor doesn't move down, but line inserted above)
+        if visible_height is not None:
+            self.adjust_scroll(visible_height)
