@@ -37,7 +37,7 @@ jobs:
           source venv/bin/activate
           pip install termnotes*.whl
 
-          MODULES=$(pip list --format=freeze | cut -d= -f1)
+          MODULES=$(pip list --format=freeze | cut -d= -f1 | tr '[:upper:]' '[:lower:]')
 
           for MODULE in $MODULES; do
             if [ "$MODULE" = "pip" ]; then
