@@ -58,6 +58,26 @@ def create_key_bindings(
         """Create a new empty note from sidebar"""
         ui.create_new_note()
 
+    @kb.add('d', filter=is_sidebar_focused & is_normal_mode & ~is_command_mode)
+    def sidebar_delete_first_d(event):
+        """Handle first 'd' in sidebar for dd deletion"""
+        if mode_manager.command_buffer == 'd':
+            # Second 'd' pressed - confirm deletion
+            selected_note = note_list_manager.selected_note
+            if selected_note:
+                if ui.pending_deletion == selected_note.id:
+                    # Confirmed - delete the note
+                    ui.delete_note(selected_note.id)
+                    mode_manager.clear_command_buffer()
+                else:
+                    # First dd - set pending deletion
+                    ui.pending_deletion = selected_note.id
+                    mode_manager.set_message("Delete note? Press dd again to confirm")
+                    mode_manager.clear_command_buffer()
+        else:
+            # First 'd' pressed
+            mode_manager.add_to_command_buffer('d')
+
     # ===== EDITOR NORMAL MODE BINDINGS (ONLY WHEN EDITOR FOCUSED) =====
 
     @kb.add('h', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
@@ -338,6 +358,26 @@ def create_key_bindings(
             # Create a new empty note
             ui.create_new_note()
             mode_manager.clear_command_buffer()
+        elif command == ':delete' or command == ':d':
+            # Delete current note with confirmation
+            if buffer.current_note_id:
+                if ui.pending_deletion == buffer.current_note_id:
+                    # Already pending - delete it
+                    ui.delete_note(buffer.current_note_id)
+                else:
+                    # Set pending deletion
+                    ui.pending_deletion = buffer.current_note_id
+                    mode_manager.set_message("Delete note? :d again to confirm, :d! to force")
+            else:
+                mode_manager.set_message("No note loaded")
+            mode_manager.clear_command_buffer()
+        elif command == ':d!':
+            # Force delete current note without confirmation
+            if buffer.current_note_id:
+                ui.delete_note(buffer.current_note_id)
+            else:
+                mode_manager.set_message("No note loaded")
+            mode_manager.clear_command_buffer()
         else:
             mode_manager.set_message(f"Unknown command: {command}")
             mode_manager.clear_command_buffer()
@@ -429,9 +469,10 @@ def create_key_bindings(
     # Additional normal mode bindings to clear command buffer on other keys
     @kb.add('escape', filter=is_normal_mode & ~is_command_mode)
     def clear_command(event):
-        """Clear command buffer in normal mode"""
+        """Clear command buffer and pending states in normal mode"""
         mode_manager.clear_command_buffer()
         mode_manager.clear_message()
+        ui.pending_deletion = None
 
     # Global bindings
     @kb.add('c-c')

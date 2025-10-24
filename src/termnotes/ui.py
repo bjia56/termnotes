@@ -33,6 +33,7 @@ class EditorUI:
         self.note_list_manager = NoteListManager(self.storage)
         self.focus_manager = FocusManager()
         self.pending_note_switch = None  # For handling unsaved changes confirmation
+        self.pending_deletion = None  # For handling deletion confirmation
         self.editor_window_height = 24  # Default, will be updated dynamically
         self.editor_window_width = 80  # Default, will be updated dynamically
 
@@ -129,6 +130,39 @@ class EditorUI:
         # Clear any messages and pending state
         self.mode_manager.clear_message()
         self.pending_note_switch = None
+
+    def delete_note(self, note_id: str):
+        """
+        Delete a note by ID
+
+        Args:
+            note_id: ID of the note to delete
+        """
+        # Delete from storage
+        self.storage.delete_note(note_id)
+
+        # If we're deleting the currently loaded note, clear the buffer
+        if self.buffer.current_note_id == note_id:
+            self.buffer.load_content("", None)
+
+        # Reload note list
+        self.note_list_manager.reload_notes()
+
+        # Select next note if available
+        if self.note_list_manager.notes:
+            # Keep selection index in bounds
+            if self.note_list_manager.selected_index >= len(self.note_list_manager.notes):
+                self.note_list_manager.selected_index = len(self.note_list_manager.notes) - 1
+
+            # Load the newly selected note if buffer is empty
+            if self.buffer.current_note_id is None:
+                selected_note = self.note_list_manager.selected_note
+                if selected_note:
+                    self.buffer.load_content(selected_note.content, selected_note.id)
+
+        # Clear pending deletion state
+        self.pending_deletion = None
+        self.mode_manager.set_message("Note deleted")
 
     def _apply_horizontal_scroll(self, formatted_segments, start_col: int, end_col: int):
         """

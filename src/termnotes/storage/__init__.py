@@ -54,10 +54,15 @@ A vim-like terminal note-taking application with markdown support.
 - `:new` or `:n` - Create new empty note
 - `o` - Create new note (when sidebar is focused)
 
+### Deleting Notes
+- `dd` - Delete selected note (when sidebar is focused, confirms with second dd)
+- `:delete` or `:d` - Delete current note (confirms with second :d)
+- `:d!` - Force delete current note without confirmation
+
 ### Editing
 - `i` - Enter Insert mode
 - `Esc` - Return to Normal mode
-- `dd` - Delete current line (Normal mode)
+- `dd` - Delete current line (when editor is focused)
 - `o` - Insert new line below (when editor is focused)
 - `O` - Insert new line above
 
