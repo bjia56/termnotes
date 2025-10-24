@@ -94,6 +94,42 @@ class EditorUI:
         self.pending_note_switch = None
         self.mode_manager.clear_message()
 
+    def create_new_note(self):
+        """Create a new empty note and load it into the editor"""
+        if self.buffer.is_dirty:
+            # Store that we want to create a new note
+            self.pending_note_switch = "NEW_NOTE"
+            self.mode_manager.set_message("Unsaved changes! :w to save, :e! to discard and create new")
+        else:
+            self._do_create_new_note()
+
+    def _do_create_new_note(self):
+        """Internal method to actually create and load a new note"""
+        # Create new note with storage backend
+        new_note = self.storage.create_note()
+
+        # Save the empty note
+        self.storage.save_note(new_note)
+
+        # Reload note list to include new note
+        self.note_list_manager.reload_notes()
+
+        # Load new note into editor
+        self.buffer.load_content(new_note.content, new_note.id)
+
+        # Update selection to point to the new note (at top of list since just created)
+        for i, n in enumerate(self.note_list_manager.notes):
+            if n.id == new_note.id:
+                self.note_list_manager.selected_index = i
+                break
+
+        # Switch focus to editor
+        self.focus_manager.switch_to_editor()
+
+        # Clear any messages and pending state
+        self.mode_manager.clear_message()
+        self.pending_note_switch = None
+
     def _apply_horizontal_scroll(self, formatted_segments, start_col: int, end_col: int):
         """
         Slice formatted text segments to show only columns [start_col, end_col)

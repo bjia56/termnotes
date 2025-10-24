@@ -53,6 +53,11 @@ def create_key_bindings(
             if not buffer.is_dirty or buffer.current_note_id == selected_note.id:
                 focus_manager.switch_to_editor()
 
+    @kb.add('o', filter=is_sidebar_focused & is_normal_mode)
+    def sidebar_create_note(event):
+        """Create a new empty note from sidebar"""
+        ui.create_new_note()
+
     # ===== EDITOR NORMAL MODE BINDINGS (ONLY WHEN EDITOR FOCUSED) =====
 
     @kb.add('h', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
@@ -316,13 +321,22 @@ def create_key_bindings(
             ui.save_current_note()
             event.app.exit()
         elif command == ':e!':
-            # Force load pending note if there is one
+            # Force load pending note or create new note if there is one pending
             if ui.pending_note_switch:
-                ui.force_load_note(ui.pending_note_switch)
-                if focus_manager.is_sidebar_focused():
-                    focus_manager.switch_to_editor()
+                if ui.pending_note_switch == "NEW_NOTE":
+                    # Create new note, discarding current changes
+                    ui._do_create_new_note()
+                else:
+                    # Load pending note, discarding current changes
+                    ui.force_load_note(ui.pending_note_switch)
+                    if focus_manager.is_sidebar_focused():
+                        focus_manager.switch_to_editor()
             else:
                 mode_manager.set_message("No pending note to load")
+            mode_manager.clear_command_buffer()
+        elif command == ':new' or command == ':n':
+            # Create a new empty note
+            ui.create_new_note()
             mode_manager.clear_command_buffer()
         else:
             mode_manager.set_message(f"Unknown command: {command}")

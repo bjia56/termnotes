@@ -50,18 +50,22 @@ A vim-like terminal note-taking application with markdown support.
 - `j/k` - Move down/up (in both sidebar and editor)
 - `h/l` - Move left/right in editor
 
+### Creating Notes
+- `:new` or `:n` - Create new empty note
+- `o` - Create new note (when sidebar is focused)
+
 ### Editing
 - `i` - Enter Insert mode
 - `Esc` - Return to Normal mode
 - `dd` - Delete current line (Normal mode)
-- `o` - Insert new line below
+- `o` - Insert new line below (when editor is focused)
 - `O` - Insert new line above
 
 ### Vim Commands
 - `:w` - Save current note
 - `:e!` - Discard changes and reload
 - `:q` - Quit (prompts if unsaved changes)
-- `:n` - Create new note
+- `:wq` - Save and quit
 
 ## Code Highlighting Example
 
