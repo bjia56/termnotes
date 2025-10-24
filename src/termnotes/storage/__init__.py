@@ -4,6 +4,7 @@ Storage backends for termnotes
 Provides flexible storage with multiple backend implementations:
 - SQLiteBackend: Fast in-memory or file-based SQLite storage
 - FilesystemBackend: JSON files on disk
+- GoogleDriveBackend: JSON files in Google Drive
 - CompositeBackend: Combines multiple backends (cache + persistent)
 """
 
@@ -12,6 +13,7 @@ from .base import StorageBackend
 from .sqlite_backend import SQLiteBackend
 from .filesystem_backend import FilesystemBackend
 from .composite_backend import CompositeBackend
+from .gdrive_backend import GoogleDriveBackend
 from ..note import Note
 
 # Backward compatibility alias
@@ -100,6 +102,7 @@ __all__ = [
     "StorageBackend",
     "SQLiteBackend",
     "FilesystemBackend",
+    "GoogleDriveBackend",
     "CompositeBackend",
     "NoteStorage",
     "create_default_storage",
