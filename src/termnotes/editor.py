@@ -326,3 +326,121 @@ class EditorBuffer:
         # Adjust scroll if visible_height provided (cursor doesn't move down, but line inserted above)
         if visible_height is not None:
             self.adjust_scroll(visible_height)
+
+    # Search functionality
+    def search_forward(self, query: str, visible_height: int = None) -> bool:
+        """
+        Search for the next occurrence of query from current cursor position.
+
+        Args:
+            query: The search string to find
+            visible_height: Height of visible editor area for scroll adjustment
+
+        Returns:
+            True if match found, False otherwise
+        """
+        if not query:
+            return False
+
+        # Start from current position + 1
+        start_row = self.cursor_row
+        start_col = self.cursor_col + 1
+
+        # Search from current position to end of current line
+        current_line = self.lines[start_row][start_col:]
+        if query in current_line:
+            match_col = current_line.index(query) + start_col
+            self.cursor_col = match_col
+            if visible_height is not None:
+                self.adjust_scroll(visible_height)
+            return True
+
+        # Search remaining lines
+        for row in range(start_row + 1, len(self.lines)):
+            if query in self.lines[row]:
+                self.cursor_row = row
+                self.cursor_col = self.lines[row].index(query)
+                if visible_height is not None:
+                    self.adjust_scroll(visible_height)
+                return True
+
+        # Wrap around: search from beginning to current position
+        for row in range(0, start_row):
+            if query in self.lines[row]:
+                self.cursor_row = row
+                self.cursor_col = self.lines[row].index(query)
+                if visible_height is not None:
+                    self.adjust_scroll(visible_height)
+                return True
+
+        # Check beginning of current line (before cursor)
+        beginning_of_line = self.lines[start_row][:start_col - 1]
+        if query in beginning_of_line:
+            self.cursor_row = start_row
+            self.cursor_col = beginning_of_line.index(query)
+            if visible_height is not None:
+                self.adjust_scroll(visible_height)
+            return True
+
+        return False
+
+    def search_backward(self, query: str, visible_height: int = None) -> bool:
+        """
+        Search for the previous occurrence of query from current cursor position.
+
+        Args:
+            query: The search string to find
+            visible_height: Height of visible editor area for scroll adjustment
+
+        Returns:
+            True if match found, False otherwise
+        """
+        if not query:
+            return False
+
+        # Start from current position - 1
+        start_row = self.cursor_row
+        start_col = self.cursor_col - 1
+
+        # Search from current position backward in current line
+        if start_col >= 0:
+            current_line = self.lines[start_row][:start_col + 1]
+            if query in current_line:
+                # Find the last occurrence in this substring
+                match_col = current_line.rfind(query)
+                self.cursor_col = match_col
+                if visible_height is not None:
+                    self.adjust_scroll(visible_height)
+                return True
+
+        # Search previous lines in reverse order
+        for row in range(start_row - 1, -1, -1):
+            if query in self.lines[row]:
+                # Find the last occurrence in this line
+                self.cursor_row = row
+                self.cursor_col = self.lines[row].rfind(query)
+                if visible_height is not None:
+                    self.adjust_scroll(visible_height)
+                return True
+
+        # Wrap around: search from end to current position
+        for row in range(len(self.lines) - 1, start_row, -1):
+            if query in self.lines[row]:
+                self.cursor_row = row
+                self.cursor_col = self.lines[row].rfind(query)
+                if visible_height is not None:
+                    self.adjust_scroll(visible_height)
+                return True
+
+        # Check end of current line (after cursor)
+        if start_col < len(self.lines[start_row]) - 1:
+            end_of_line = self.lines[start_row][start_col + 1:]
+            if query in end_of_line:
+                match_col = end_of_line.rfind(query) + start_col + 1
+                self.cursor_row = start_row
+                self.cursor_col = match_col
+                if visible_height is not None:
+                    self.adjust_scroll(visible_height)
+                return True
+
+        return False

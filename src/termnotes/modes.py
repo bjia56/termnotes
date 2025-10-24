@@ -12,6 +12,9 @@ class ModeManager:
         self.current_mode = Mode.NORMAL
         self.command_buffer = ""  # For commands like :q, :w, dd, etc.
         self.message = ""  # Status message to display
+        self.search_query = ""  # Current search query
+        self.last_search = ""  # Last executed search for n command
+        self.last_search_direction = "forward"  # Direction of last search: "forward" or "backward"
 
     def set_mode(self, mode: Mode):
         """Change the current mode"""
@@ -54,7 +57,42 @@ class ModeManager:
         """Get display string for current mode"""
         if self.current_mode == Mode.INSERT:
             return "-- INSERT --"
+        elif self.command_buffer.startswith('/') or self.command_buffer.startswith('?'):
+            return self.command_buffer
         elif self.command_buffer:
             return self.command_buffer
         else:
             return ""
+
+    def is_search_mode(self) -> bool:
+        """Check if in search mode"""
+        return self.command_buffer.startswith('/') or self.command_buffer.startswith('?')
+
+    def is_forward_search(self) -> bool:
+        """Check if in forward search mode"""
+        return self.command_buffer.startswith('/')
+
+    def is_backward_search(self) -> bool:
+        """Check if in backward search mode"""
+        return self.command_buffer.startswith('?')
+
+    def start_search_forward(self):
+        """Start forward search mode"""
+        self.command_buffer = "/"
+        self.search_query = ""
+
+    def start_search_backward(self):
+        """Start backward search mode"""
+        self.command_buffer = "?"
+        self.search_query = ""
+
+    def execute_search(self):
+        """Execute the current search and save it"""
+        if self.command_buffer.startswith('/'):
+            self.search_query = self.command_buffer[1:]  # Remove '/' prefix
+            self.last_search_direction = "forward"
+        elif self.command_buffer.startswith('?'):
+            self.search_query = self.command_buffer[1:]  # Remove '?' prefix
+            self.last_search_direction = "backward"
+        self.last_search = self.search_query
+        self.command_buffer = ""

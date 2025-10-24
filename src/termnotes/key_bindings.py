@@ -24,6 +24,7 @@ def create_key_bindings(
     is_normal_mode = Condition(lambda: mode_manager.is_normal_mode())
     is_insert_mode = Condition(lambda: mode_manager.is_insert_mode())
     is_command_mode = Condition(lambda: mode_manager.command_buffer.startswith(':'))
+    is_search_mode = Condition(lambda: mode_manager.is_search_mode())
     is_sidebar_focused = Condition(lambda: focus_manager.is_sidebar_focused())
     is_editor_focused = Condition(lambda: focus_manager.is_editor_focused())
 
@@ -54,101 +55,133 @@ def create_key_bindings(
 
     # ===== EDITOR NORMAL MODE BINDINGS (ONLY WHEN EDITOR FOCUSED) =====
 
-    @kb.add('h', filter=is_editor_focused & is_normal_mode & ~is_command_mode)
-    @kb.add('left', filter=is_editor_focused & is_normal_mode & ~is_command_mode)
+    @kb.add('h', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
+    @kb.add('left', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
     def move_left(event):
         """Move cursor left in normal mode"""
         buffer.move_cursor_left()
         mode_manager.clear_command_buffer()
 
-    @kb.add('j', filter=is_editor_focused & is_normal_mode & ~is_command_mode)
-    @kb.add('down', filter=is_editor_focused & is_normal_mode & ~is_command_mode)
+    @kb.add('j', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
+    @kb.add('down', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
     def move_down(event):
         """Move cursor down in normal mode"""
         buffer.move_cursor_down(ui.editor_window_height)
         mode_manager.clear_command_buffer()
 
-    @kb.add('k', filter=is_editor_focused & is_normal_mode & ~is_command_mode)
-    @kb.add('up', filter=is_editor_focused & is_normal_mode & ~is_command_mode)
+    @kb.add('k', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
+    @kb.add('up', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
     def move_up(event):
         """Move cursor up in normal mode"""
         buffer.move_cursor_up(ui.editor_window_height)
         mode_manager.clear_command_buffer()
 
-    @kb.add('l', filter=is_editor_focused & is_normal_mode & ~is_command_mode)
-    @kb.add('right', filter=is_editor_focused & is_normal_mode & ~is_command_mode)
+    @kb.add('l', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
+    @kb.add('right', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
     def move_right(event):
         """Move cursor right in normal mode"""
         buffer.move_cursor_right()
         mode_manager.clear_command_buffer()
 
-    @kb.add('0', filter=is_editor_focused & is_normal_mode & ~is_command_mode)
+    @kb.add('0', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
     def move_line_start(event):
         """Move to start of line"""
         buffer.move_cursor_to_line_start()
         mode_manager.clear_command_buffer()
 
-    @kb.add('$', filter=is_editor_focused & is_normal_mode & ~is_command_mode)
+    @kb.add('$', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
     def move_line_end(event):
         """Move to end of line"""
         buffer.move_cursor_to_line_end()
         mode_manager.clear_command_buffer()
 
-    @kb.add('c-d', filter=is_editor_focused & is_normal_mode & ~is_command_mode)
+    @kb.add('c-d', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
     def half_page_down(event):
         """Scroll down half a page"""
         buffer.half_page_down(ui.editor_window_height)
         mode_manager.clear_command_buffer()
 
-    @kb.add('c-u', filter=is_editor_focused & is_normal_mode & ~is_command_mode)
+    @kb.add('c-u', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
     def half_page_up(event):
         """Scroll up half a page"""
         buffer.half_page_up(ui.editor_window_height)
         mode_manager.clear_command_buffer()
 
-    @kb.add('pagedown', filter=is_editor_focused & is_normal_mode & ~is_command_mode)
+    @kb.add('pagedown', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
     def page_down_key(event):
         """Scroll down one page"""
         buffer.page_down(ui.editor_window_height)
         mode_manager.clear_command_buffer()
 
-    @kb.add('pageup', filter=is_editor_focused & is_normal_mode & ~is_command_mode)
+    @kb.add('pageup', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
     def page_up_key(event):
         """Scroll up one page"""
         buffer.page_up(ui.editor_window_height)
         mode_manager.clear_command_buffer()
 
-    @kb.add('i', filter=is_editor_focused & is_normal_mode & ~is_command_mode)
+    @kb.add('i', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
     def enter_insert_mode(event):
         """Enter insert mode"""
         mode_manager.enter_insert_mode()
         mode_manager.clear_command_buffer()
 
-    @kb.add('a', filter=is_editor_focused & is_normal_mode & ~is_command_mode)
+    @kb.add('a', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
     def append_mode(event):
         """Enter insert mode after cursor"""
         buffer.move_cursor_right()
         mode_manager.enter_insert_mode()
         mode_manager.clear_command_buffer()
 
-    @kb.add('o', filter=is_editor_focused & is_normal_mode & ~is_command_mode)
+    @kb.add('o', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
     def open_line_below(event):
         """Open new line below and enter insert mode"""
         buffer.insert_line_below(ui.editor_window_height)
         mode_manager.enter_insert_mode()
         mode_manager.clear_command_buffer()
 
-    @kb.add('O', filter=is_editor_focused & is_normal_mode & ~is_command_mode)
+    @kb.add('O', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
     def open_line_above(event):
         """Open new line above and enter insert mode"""
         buffer.insert_line_above(ui.editor_window_height)
         mode_manager.enter_insert_mode()
         mode_manager.clear_command_buffer()
 
-    @kb.add('x', filter=is_editor_focused & is_normal_mode & ~is_command_mode)
+    @kb.add('x', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
     def delete_char(event):
         """Delete character under cursor"""
         buffer.delete_char_at_cursor()
+        mode_manager.clear_command_buffer()
+
+    @kb.add('n', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
+    def repeat_search(event):
+        """Repeat last search in same direction"""
+        if mode_manager.last_search:
+            if mode_manager.last_search_direction == "forward":
+                found = buffer.search_forward(mode_manager.last_search, ui.editor_window_height)
+            else:
+                found = buffer.search_backward(mode_manager.last_search, ui.editor_window_height)
+            if not found:
+                mode_manager.set_message(f"Pattern not found: {mode_manager.last_search}")
+            else:
+                mode_manager.clear_message()
+        else:
+            mode_manager.set_message("No previous search pattern")
+        mode_manager.clear_command_buffer()
+
+    @kb.add('N', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
+    def repeat_search_opposite(event):
+        """Repeat last search in opposite direction"""
+        if mode_manager.last_search:
+            if mode_manager.last_search_direction == "forward":
+                found = buffer.search_backward(mode_manager.last_search, ui.editor_window_height)
+            else:
+                found = buffer.search_forward(mode_manager.last_search, ui.editor_window_height)
+            if not found:
+                mode_manager.set_message(f"Pattern not found: {mode_manager.last_search}")
+            else:
+                mode_manager.clear_message()
+        else:
+            mode_manager.set_message("No previous search pattern")
         mode_manager.clear_command_buffer()
 
     # ===== FOCUS SWITCHING (CTRL+W combinations in NORMAL MODE) =====
@@ -169,10 +202,61 @@ def create_key_bindings(
 
     # ===== COMMAND MODE (works in both sidebar and editor) =====
 
-    @kb.add(':', filter=is_normal_mode & ~is_command_mode)
+    @kb.add(':', filter=is_normal_mode & ~is_command_mode & ~is_search_mode)
     def command_mode(event):
         """Enter command mode"""
         mode_manager.add_to_command_buffer(':')
+
+    # ===== SEARCH MODE (editor only) =====
+
+    @kb.add('/', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
+    def search_forward_mode(event):
+        """Enter forward search mode"""
+        mode_manager.start_search_forward()
+
+    @kb.add('?', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
+    def search_backward_mode(event):
+        """Enter backward search mode"""
+        mode_manager.start_search_backward()
+
+    @kb.add('enter', filter=is_search_mode)
+    def execute_search(event):
+        """Execute the search when Enter is pressed"""
+        is_forward = mode_manager.command_buffer.startswith('/')
+        mode_manager.execute_search()
+        # Perform the search
+        if mode_manager.search_query:
+            if is_forward:
+                found = buffer.search_forward(mode_manager.search_query, ui.editor_window_height)
+            else:
+                found = buffer.search_backward(mode_manager.search_query, ui.editor_window_height)
+            if not found:
+                mode_manager.set_message(f"Pattern not found: {mode_manager.search_query}")
+            else:
+                mode_manager.clear_message()
+        else:
+            mode_manager.clear_message()
+
+    @kb.add('backspace', filter=is_search_mode)
+    def search_backspace(event):
+        """Remove last character from search buffer"""
+        if len(mode_manager.command_buffer) > 1:  # Keep the '/' or '?'
+            mode_manager.command_buffer = mode_manager.command_buffer[:-1]
+        else:
+            # If only '/' or '?' left, exit search mode
+            mode_manager.clear_command_buffer()
+
+    @kb.add('escape', filter=is_search_mode)
+    def cancel_search(event):
+        """Cancel search mode with Escape"""
+        mode_manager.clear_command_buffer()
+
+    # When in search mode (after /), capture printable characters
+    @kb.add('<any>', filter=is_search_mode)
+    def add_to_search(event):
+        """Add character to search buffer"""
+        if len(event.data) == 1 and event.data.isprintable():
+            mode_manager.add_to_command_buffer(event.data)
 
     @kb.add('enter', filter=is_command_mode)
     def execute_command(event):
