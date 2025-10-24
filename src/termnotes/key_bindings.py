@@ -95,6 +95,18 @@ def create_key_bindings(
         buffer.move_cursor_to_line_end()
         mode_manager.clear_command_buffer()
 
+    @kb.add('home', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
+    def move_line_start_home(event):
+        """Move to start of line with Home key"""
+        buffer.move_cursor_to_line_start()
+        mode_manager.clear_command_buffer()
+
+    @kb.add('end', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
+    def move_line_end_end(event):
+        """Move to end of line with End key"""
+        buffer.move_cursor_to_line_end()
+        mode_manager.clear_command_buffer()
+
     @kb.add('c-d', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
     def half_page_down(event):
         """Scroll down half a page"""
@@ -382,6 +394,16 @@ def create_key_bindings(
     def insert_move_down(event):
         """Move cursor down in insert mode"""
         buffer.move_cursor_down(ui.editor_window_height)
+
+    @kb.add('home', filter=is_editor_focused & is_insert_mode)
+    def insert_move_home(event):
+        """Move to start of line in insert mode"""
+        buffer.move_cursor_to_line_start()
+
+    @kb.add('end', filter=is_editor_focused & is_insert_mode)
+    def insert_move_end(event):
+        """Move to end of line in insert mode"""
+        buffer.move_cursor_to_line_end()
 
     # Catch all printable characters in insert mode
     @kb.add('<any>', filter=is_editor_focused & is_insert_mode)
