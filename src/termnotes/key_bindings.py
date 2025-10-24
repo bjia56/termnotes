@@ -184,6 +184,32 @@ def create_key_bindings(
             mode_manager.set_message("No previous search pattern")
         mode_manager.clear_command_buffer()
 
+    # ===== HORIZONTAL SCROLLING (NORMAL MODE, EDITOR FOCUSED) =====
+
+    @kb.add('z', 'h', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
+    def scroll_left_one(event):
+        """Scroll view left by one column"""
+        buffer.scroll_left(1)
+        mode_manager.clear_command_buffer()
+
+    @kb.add('z', 'l', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
+    def scroll_right_one(event):
+        """Scroll view right by one column"""
+        buffer.scroll_right(1)
+        mode_manager.clear_command_buffer()
+
+    @kb.add('z', 'H', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
+    def scroll_left_half_screen(event):
+        """Scroll view left by half screen width"""
+        buffer.scroll_half_screen_left(ui.editor_window_width)
+        mode_manager.clear_command_buffer()
+
+    @kb.add('z', 'L', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
+    def scroll_right_half_screen(event):
+        """Scroll view right by half screen width"""
+        buffer.scroll_half_screen_right(ui.editor_window_width)
+        mode_manager.clear_command_buffer()
+
     # ===== FOCUS SWITCHING (CTRL+W combinations in NORMAL MODE) =====
 
     @kb.add('c-w', 'h', filter=is_normal_mode)

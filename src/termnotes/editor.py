@@ -25,6 +25,7 @@ class EditorBuffer:
         self.cursor_row: int = 0
         self.cursor_col: int = 0
         self.scroll_offset: int = 0  # Top line currently displayed
+        self.horizontal_scroll_offset: int = 0  # Leftmost column currently displayed
         self.is_dirty: bool = False  # Track if buffer has unsaved changes
         self.current_note_id: str = None  # Track which note is currently loaded
 
@@ -67,6 +68,70 @@ class EditorBuffer:
         # Ensure scroll_offset is non-negative
         self.scroll_offset = max(0, self.scroll_offset)
 
+    def adjust_horizontal_scroll(self, visible_width: int):
+        """
+        Adjust horizontal scroll offset to keep cursor visible within the window.
+        Scrolls only when cursor reaches the edge (no margin).
+
+        Args:
+            visible_width: Number of columns visible in the editor window
+        """
+        if visible_width <= 0:
+            return
+
+        # Scroll right if cursor is at or beyond right edge
+        if self.cursor_col >= self.horizontal_scroll_offset + visible_width:
+            self.horizontal_scroll_offset = self.cursor_col - visible_width + 1
+
+        # Scroll left if cursor is before left edge
+        if self.cursor_col < self.horizontal_scroll_offset:
+            self.horizontal_scroll_offset = self.cursor_col
+
+        # Ensure horizontal_scroll_offset is non-negative
+        self.horizontal_scroll_offset = max(0, self.horizontal_scroll_offset)
+
+    def scroll_left(self, amount: int = 1):
+        """
+        Scroll view left (decrease horizontal offset)
+
+        Args:
+            amount: Number of columns to scroll left
+        """
+        self.horizontal_scroll_offset = max(0, self.horizontal_scroll_offset - amount)
+
+    def scroll_right(self, amount: int = 1):
+        """
+        Scroll view right (increase horizontal offset)
+
+        Args:
+            amount: Number of columns to scroll right
+        """
+        self.horizontal_scroll_offset += amount
+
+    def scroll_half_screen_left(self, visible_width: int):
+        """
+        Scroll view left by half screen width
+
+        Args:
+            visible_width: Number of columns visible in the editor window
+        """
+        if visible_width <= 0:
+            return
+        half_width = max(1, visible_width // 2)
+        self.scroll_left(half_width)
+
+    def scroll_half_screen_right(self, visible_width: int):
+        """
+        Scroll view right by half screen width
+
+        Args:
+            visible_width: Number of columns visible in the editor window
+        """
+        if visible_width <= 0:
+            return
+        half_width = max(1, visible_width // 2)
+        self.scroll_right(half_width)
+
     def mark_dirty(self):
         """Mark buffer as having unsaved changes"""
         self.is_dirty = True
@@ -91,6 +156,7 @@ class EditorBuffer:
         self.cursor_row = 0
         self.cursor_col = 0
         self.scroll_offset = 0
+        self.horizontal_scroll_offset = 0
         self.current_note_id = note_id
         self.is_dirty = False
 

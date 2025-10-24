@@ -34,6 +34,7 @@ class EditorUI:
         self.focus_manager = FocusManager()
         self.pending_note_switch = None  # For handling unsaved changes confirmation
         self.editor_window_height = 24  # Default, will be updated dynamically
+        self.editor_window_width = 80  # Default, will be updated dynamically
 
         # Load first note into editor if no initial text
         if not initial_text and self.note_list_manager.selected_note:
@@ -93,10 +94,53 @@ class EditorUI:
         self.pending_note_switch = None
         self.mode_manager.clear_message()
 
+    def _apply_horizontal_scroll(self, formatted_segments, start_col: int, end_col: int):
+        """
+        Slice formatted text segments to show only columns [start_col, end_col)
+
+        Args:
+            formatted_segments: list of (style, text) tuples
+            start_col: leftmost column to display (inclusive)
+            end_col: rightmost column to display (exclusive)
+
+        Returns:
+            list of (style, text) tuples with sliced text
+        """
+        result = []
+        char_pos = 0
+
+        for style, text in formatted_segments:
+            text_len = len(text)
+            segment_end = char_pos + text_len
+
+            # Skip segments entirely before visible range
+            if segment_end <= start_col:
+                char_pos = segment_end
+                continue
+
+            # Stop if we're past the visible range
+            if char_pos >= end_col:
+                break
+
+            # Calculate slice within this segment
+            slice_start = max(0, start_col - char_pos)
+            slice_end = min(text_len, end_col - char_pos)
+
+            if slice_start < slice_end:
+                result.append((style, text[slice_start:slice_end]))
+
+            char_pos = segment_end
+
+        return result
+
     def get_text_content(self):
         """Get formatted text content for the editor window"""
-        # Update window height on each render to handle terminal resizing
+        # Update window dimensions on each render to handle terminal resizing
         self.update_editor_window_height()
+        self.update_editor_window_width()
+
+        # Adjust horizontal scroll to keep cursor visible
+        self.buffer.adjust_horizontal_scroll(self.editor_window_width)
 
         lines = self.buffer.get_display_lines()
         result = []
@@ -140,9 +184,21 @@ class EditorUI:
                     # Add cursor if needed
                     if block_i == self.buffer.cursor_row and show_cursor:
                         line_with_cursor = self._add_cursor_to_formatted_line(formatted_line, self.buffer.cursor_col)
-                        result.extend(line_with_cursor)
+                        # Apply horizontal scrolling
+                        scrolled_line = self._apply_horizontal_scroll(
+                            line_with_cursor,
+                            self.buffer.horizontal_scroll_offset,
+                            self.buffer.horizontal_scroll_offset + self.editor_window_width
+                        )
+                        result.extend(scrolled_line)
                     else:
-                        result.extend(formatted_line)
+                        # Apply horizontal scrolling
+                        scrolled_line = self._apply_horizontal_scroll(
+                            formatted_line,
+                            self.buffer.horizontal_scroll_offset,
+                            self.buffer.horizontal_scroll_offset + self.editor_window_width
+                        )
+                        result.extend(scrolled_line)
 
                     # Add newline for all but last visible line
                     if block_i < visible_end - 1:
@@ -156,9 +212,21 @@ class EditorUI:
 
                 if i == self.buffer.cursor_row and show_cursor:
                     line_with_cursor = self._add_cursor_to_formatted_line(formatted_line, self.buffer.cursor_col)
-                    result.extend(line_with_cursor)
+                    # Apply horizontal scrolling
+                    scrolled_line = self._apply_horizontal_scroll(
+                        line_with_cursor,
+                        self.buffer.horizontal_scroll_offset,
+                        self.buffer.horizontal_scroll_offset + self.editor_window_width
+                    )
+                    result.extend(scrolled_line)
                 else:
-                    result.extend(formatted_line)
+                    # Apply horizontal scrolling
+                    scrolled_line = self._apply_horizontal_scroll(
+                        formatted_line,
+                        self.buffer.horizontal_scroll_offset,
+                        self.buffer.horizontal_scroll_offset + self.editor_window_width
+                    )
+                    result.extend(scrolled_line)
 
                 # Add newline for all but last visible line
                 if i < visible_end - 1:
@@ -455,7 +523,13 @@ class EditorUI:
         row = self.buffer.cursor_row + 1
         col = self.buffer.cursor_col + 1
         total_lines = self.buffer.line_count
-        pos_str = f"{dirty_str} {row},{col}  {row}/{total_lines}".strip()
+
+        # Add horizontal scroll indicator if scrolled
+        if self.buffer.horizontal_scroll_offset > 0:
+            scroll_indicator = f" <{self.buffer.horizontal_scroll_offset}"
+            pos_str = f"{dirty_str} {row},{col}{scroll_indicator}  {row}/{total_lines}".strip()
+        else:
+            pos_str = f"{dirty_str} {row},{col}  {row}/{total_lines}".strip()
 
         # Message (middle)
         message = self.mode_manager.message
@@ -483,6 +557,16 @@ class EditorUI:
             self.editor_window_height = max(1, terminal_height - 1)
         except:
             self.editor_window_height = 24  # Default fallback
+
+    def update_editor_window_width(self):
+        """Update the cached editor window width based on terminal size"""
+        try:
+            import shutil
+            terminal_width = shutil.get_terminal_size().columns
+            # Subtract sidebar (30 columns)
+            self.editor_window_width = max(1, terminal_width - 30)
+        except:
+            self.editor_window_width = 80  # Default fallback
 
     def create_layout(self):
         """Create the UI layout with sidebar and editor"""
