@@ -40,7 +40,7 @@ jobs:
           folders=$(ls target)
 
           for folder in $folders; do
-            python scripts/add_dir_into_zip.py ./target/"$folder" ./python.exe Lib/site-packages/"$folder"
+            python scripts/add_to_zip.py ./target/"$folder" ./python.exe Lib/site-packages/"$folder"
           done
 
           zip -urj python.exe scripts/.args
