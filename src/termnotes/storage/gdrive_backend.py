@@ -218,7 +218,7 @@ class GoogleDriveBackend(StorageBackend):
             docx_bytes = request.execute()
 
             # Parse DOCX
-            note = self._note_from_docx(docx_bytes)
+            note = self._note_from_docx(note_id, docx_bytes)
 
             return note
 
@@ -340,14 +340,13 @@ class GoogleDriveBackend(StorageBackend):
 
         return buffer.read()
 
-    def _note_from_docx(self, docx_bytes: bytes) -> Note:
+    def _note_from_docx(self, note_id: str, docx_bytes: bytes) -> Note:
         """Create Note object from DOCX bytes, preserving markdown format"""
         # Load document from bytes
         buffer = BytesIO(docx_bytes)
         doc = Document(buffer)
 
         # Extract metadata from core properties
-        note_id = doc.core_properties.title or str(uuid.uuid4())
         created_at = doc.core_properties.created or utc_now()
         updated_at = doc.core_properties.modified or utc_now()
 
