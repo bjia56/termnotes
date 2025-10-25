@@ -6,11 +6,13 @@ import sys
 import argparse
 from .ui import EditorUI
 from .config import get_example_config
+from . import __version__
 
 
 def main():
     """Main entry point for the editor"""
     parser = argparse.ArgumentParser(description="A vim-like terminal note-taking application")
+    parser.add_argument("--version", action="version", version=f"termnotes {__version__}")
     parser.add_argument("--print-config", action="store_true",
                        help="Print example configuration and exit")
 
