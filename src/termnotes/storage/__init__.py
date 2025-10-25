@@ -34,7 +34,7 @@ def create_default_storage() -> StorageBackend:
         CompositeBackend configured with SQLite cache + filesystem storage
     """
     cache = SQLiteBackend(":memory:")
-    persistent = FilesystemBackend()  # Uses ~/.termnotes/notes by default
+    persistent = GoogleDriveBackend() #FilesystemBackend()  # Uses ~/.termnotes/notes by default
 
     storage = CompositeBackend(cache, persistent)
 
