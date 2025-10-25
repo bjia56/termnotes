@@ -2,14 +2,12 @@
 Google Drive-based note storage backend
 """
 
+import datetime
 import os
-from io import BytesIO
+import json
 from pathlib import Path
 from typing import List, Optional, Dict
 
-from docx import Document
-
-from ..utils import utc_now, normalize_to_utc
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -19,6 +17,7 @@ from googleapiclient.errors import HttpError
 
 from .base import StorageBackend
 from ..note import Note
+from ..utils import utc_now
 
 
 # Google Drive API scopes
@@ -144,7 +143,7 @@ class GoogleDriveBackend(StorageBackend):
         """Build map of note_id -> drive_file_id from Drive"""
         query = (
             f"'{self._folder_id}' in parents and "
-            f"name contains '.docx' and "
+            f"name contains '.json' and "
             f"trashed=false"
         )
 
@@ -172,9 +171,9 @@ class GoogleDriveBackend(StorageBackend):
             # Build map
             self._file_id_map.clear()
             for file in all_files:
-                # Extract note_id from filename (remove .docx extension)
+                # Extract note_id from filename (remove .json extension)
                 filename = file['name']
-                if filename.endswith('.docx'):
+                if filename.endswith('.json'):
                     note_id = filename[:-5]
                     self._file_id_map[note_id] = file['id']
 
@@ -214,10 +213,12 @@ class GoogleDriveBackend(StorageBackend):
         # Download file content
         try:
             request = self._service.files().get_media(fileId=file_id)
-            docx_bytes = request.execute()
+            content_bytes = request.execute()
+            content_str = content_bytes.decode('utf-8')
 
-            # Parse DOCX
-            note = self._note_from_docx(note_id, docx_bytes)
+            # Parse JSON
+            data = json.loads(content_str)
+            note = self._note_from_dict(data)
 
             return note
 
@@ -227,7 +228,7 @@ class GoogleDriveBackend(StorageBackend):
                 self._file_id_map.pop(note_id, None)
                 return None
             raise Exception(f"Failed to download note {note_id}: {e}")
-        except Exception as e:
+        except (json.JSONDecodeError, KeyError) as e:
             raise Exception(f"Failed to parse note {note_id}: {e}")
 
     def save_note(self, note: Note):
@@ -235,8 +236,10 @@ class GoogleDriveBackend(StorageBackend):
         # Update timestamp
         note.updated_at = utc_now()
 
-        # Convert to DOCX
-        docx_bytes = self._note_to_docx(note)
+        # Convert to JSON
+        data = self._note_to_dict(note)
+        json_content = json.dumps(data, indent=2)
+        json_bytes = json_content.encode('utf-8')
 
         # Check if file exists
         file_id = self._file_id_map.get(note.id)
@@ -245,8 +248,8 @@ class GoogleDriveBackend(StorageBackend):
             if file_id:
                 # Update existing file
                 media = MediaInMemoryUpload(
-                    docx_bytes,
-                    mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                    json_bytes,
+                    mimetype='application/json',
                     resumable=True
                 )
 
@@ -259,14 +262,14 @@ class GoogleDriveBackend(StorageBackend):
             else:
                 # Create new file
                 file_metadata = {
-                    'name': f'{note.id}.docx',
+                    'name': f'{note.id}.json',
                     'parents': [self._folder_id],
-                    'mimeType': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                    'mimeType': 'application/json'
                 }
 
                 media = MediaInMemoryUpload(
-                    docx_bytes,
-                    mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                    json_bytes,
+                    mimetype='application/json',
                     resumable=True
                 )
 
@@ -310,50 +313,20 @@ class GoogleDriveBackend(StorageBackend):
         self._file_id_map.clear()
         self._service = None
 
-    def _note_to_docx(self, note: Note) -> bytes:
-        """Convert Note object to DOCX format"""
-        # Create new document
-        doc = Document()
+    def _note_to_dict(self, note: Note) -> dict:
+        """Convert Note object to dictionary for JSON storage"""
+        return {
+            "id": note.id,
+            "content": note.content,
+            "created_at": note.created_at.isoformat(),
+            "updated_at": note.updated_at.isoformat()
+        }
 
-        # Add content as paragraphs
-        if note.content:
-            for line in note.content.split('\n'):
-                doc.add_paragraph(line)
-
-        # Set core properties for metadata
-        doc.core_properties.title = note.id
-        doc.core_properties.created = note.created_at
-        doc.core_properties.modified = note.updated_at
-
-        # Save to BytesIO buffer
-        buffer = BytesIO()
-        doc.save(buffer)
-        buffer.seek(0)
-
-        return buffer.read()
-
-    def _note_from_docx(self, note_id: str, docx_bytes: bytes) -> Note:
-        """Create Note object from DOCX bytes, preserving markdown format"""
-        # Load document from bytes
-        buffer = BytesIO(docx_bytes)
-        doc = Document(buffer)
-
-        # Extract metadata from core properties
-        created_at = doc.core_properties.created or utc_now()
-        updated_at = doc.core_properties.modified or utc_now()
-
-        # Normalize datetimes to UTC (DOCX files may have timezone-aware timestamps)
-        created_at = normalize_to_utc(created_at)
-        updated_at = normalize_to_utc(updated_at)
-
-        # Extract text directly from paragraphs to preserve markdown
-        # Each paragraph in DOCX corresponds to a line in the original markdown
-        paragraphs = [p.text for p in doc.paragraphs]
-        content = '\n'.join(paragraphs)
-
+    def _note_from_dict(self, data: dict) -> Note:
+        """Create Note object from dictionary"""
         return Note(
-            note_id=note_id,
-            content=content,
-            created_at=created_at,
-            updated_at=updated_at
+            note_id=data["id"],
+            content=data["content"],
+            created_at=datetime.fromisoformat(data["created_at"]),
+            updated_at=datetime.fromisoformat(data["updated_at"])
         )
