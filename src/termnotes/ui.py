@@ -27,8 +27,8 @@ class EditorUI:
     def __init__(self, initial_text: str = ""):
         # Core components
         self.storage = create_default_storage()  # Composite: SQLite cache + filesystem
-        self.buffer = EditorBuffer(initial_text)
         self.mode_manager = ModeManager()
+        self.buffer = EditorBuffer(initial_text, self.mode_manager)
         self.note_list_manager = NoteListManager(self.storage)
         self.focus_manager = FocusManager()
         self.pending_note_switch = None  # For handling unsaved changes confirmation

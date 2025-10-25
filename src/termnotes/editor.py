@@ -15,7 +15,7 @@ class Mode(Enum):
 class EditorBuffer:
     """In-memory text buffer with cursor management"""
 
-    def __init__(self, initial_text: str = ""):
+    def __init__(self, initial_text: str = "", mode_manager=None):
         """Initialize the buffer with optional initial text"""
         if initial_text:
             self.lines: List[str] = initial_text.split('\n')
@@ -28,6 +28,7 @@ class EditorBuffer:
         self.horizontal_scroll_offset: int = 0  # Leftmost column currently displayed
         self.is_dirty: bool = False  # Track if buffer has unsaved changes
         self.current_note_id: str = None  # Track which note is currently loaded
+        self.mode_manager = mode_manager  # Reference to mode manager for mode-aware cursor behavior
 
     @property
     def current_line(self) -> str:
@@ -38,6 +39,38 @@ class EditorBuffer:
     def line_count(self) -> int:
         """Get total number of lines"""
         return len(self.lines)
+
+    def get_max_cursor_col(self, line: str = None) -> int:
+        """
+        Get the maximum cursor column position for the current mode.
+
+        In Normal mode: cursor must be ON a character (max = len(line) - 1)
+        In Insert mode: cursor can be AFTER the last character (max = len(line))
+
+        Args:
+            line: The line to check. If None, uses current line.
+
+        Returns:
+            Maximum valid cursor column position
+        """
+        if line is None:
+            line = self.current_line
+
+        # If we have a mode_manager and we're in normal mode
+        if self.mode_manager and self.mode_manager.is_normal_mode():
+            # Normal mode: cursor must be on a character
+            # Empty line: cursor at 0, otherwise max is len-1
+            return max(0, len(line) - 1) if line else 0
+        else:
+            # Insert mode (or no mode_manager): cursor can be after last char
+            return len(line)
+
+    def clamp_cursor(self):
+        """
+        Clamp cursor position to valid range for current mode.
+        Call this after mode changes to ensure cursor is in valid position.
+        """
+        self.cursor_col = min(self.cursor_col, self.get_max_cursor_col())
 
     def get_text(self) -> str:
         """Get all buffer text as a single string"""
@@ -168,7 +201,8 @@ class EditorBuffer:
 
     def move_cursor_right(self):
         """Move cursor right"""
-        if self.cursor_col < len(self.current_line):
+        max_col = self.get_max_cursor_col()
+        if self.cursor_col < max_col:
             self.cursor_col += 1
 
     def move_cursor_up(self, visible_height: int = None):
@@ -176,7 +210,7 @@ class EditorBuffer:
         if self.cursor_row > 0:
             self.cursor_row -= 1
             # Adjust column if necessary
-            self.cursor_col = min(self.cursor_col, len(self.current_line))
+            self.cursor_col = min(self.cursor_col, self.get_max_cursor_col())
             # Adjust scroll if visible_height provided
             if visible_height is not None:
                 self.adjust_scroll(visible_height)
@@ -186,7 +220,7 @@ class EditorBuffer:
         if self.cursor_row < len(self.lines) - 1:
             self.cursor_row += 1
             # Adjust column if necessary
-            self.cursor_col = min(self.cursor_col, len(self.current_line))
+            self.cursor_col = min(self.cursor_col, self.get_max_cursor_col())
             # Adjust scroll if visible_height provided
             if visible_height is not None:
                 self.adjust_scroll(visible_height)
@@ -197,7 +231,7 @@ class EditorBuffer:
 
     def move_cursor_to_line_end(self):
         """Move cursor to end of line"""
-        self.cursor_col = len(self.current_line)
+        self.cursor_col = self.get_max_cursor_col()
 
     def page_down(self, visible_height: int):
         """Move cursor down by one page (vim Ctrl+F behavior)"""
@@ -225,7 +259,7 @@ class EditorBuffer:
             self.cursor_row = new_row
 
         # Adjust column if necessary
-        self.cursor_col = min(self.cursor_col, len(self.current_line))
+        self.cursor_col = min(self.cursor_col, self.get_max_cursor_col())
 
     def page_up(self, visible_height: int):
         """Move cursor up by one page (vim Ctrl+B behavior)"""
@@ -252,7 +286,7 @@ class EditorBuffer:
             self.cursor_row = new_row
 
         # Adjust column if necessary
-        self.cursor_col = min(self.cursor_col, len(self.current_line))
+        self.cursor_col = min(self.cursor_col, self.get_max_cursor_col())
 
     def half_page_down(self, visible_height: int):
         """Move cursor down by half a page (vim Ctrl+D)"""
@@ -280,7 +314,7 @@ class EditorBuffer:
             self.scroll_offset = new_scroll_offset
 
         # Adjust column if necessary
-        self.cursor_col = min(self.cursor_col, len(self.current_line))
+        self.cursor_col = min(self.cursor_col, self.get_max_cursor_col())
 
     def half_page_up(self, visible_height: int):
         """Move cursor up by half a page (vim Ctrl+U)"""
@@ -307,7 +341,7 @@ class EditorBuffer:
             self.scroll_offset = new_scroll_offset
 
         # Adjust column if necessary
-        self.cursor_col = min(self.cursor_col, len(self.current_line))
+        self.cursor_col = min(self.cursor_col, self.get_max_cursor_col())
 
     # Text modification
     def insert_char(self, char: str):
@@ -415,7 +449,7 @@ class EditorBuffer:
             # Adjust cursor position
             if self.cursor_row >= len(self.lines):
                 self.cursor_row = len(self.lines) - 1
-            self.cursor_col = min(self.cursor_col, len(self.current_line))
+            self.cursor_col = min(self.cursor_col, self.get_max_cursor_col())
         else:
             # Don't delete the last line, just clear it
             self.lines[0] = ""

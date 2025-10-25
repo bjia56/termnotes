@@ -410,8 +410,8 @@ def create_key_bindings(
     def exit_insert_mode(event):
         """Exit insert mode"""
         mode_manager.enter_normal_mode()
-        # Move cursor left in normal mode (vim behavior)
-        buffer.move_cursor_left()
+        # Clamp cursor to valid position for normal mode
+        buffer.clamp_cursor()
 
     @kb.add('enter', filter=is_editor_focused & is_insert_mode)
     def insert_newline(event):
