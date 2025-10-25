@@ -319,6 +319,54 @@ class EditorBuffer:
         self.cursor_col += 1
         self.mark_dirty()
 
+    def paste_text(self, text: str, visible_height: int = None):
+        """
+        Paste text at cursor position, handling multi-line content
+
+        Args:
+            text: Text to paste (can contain newlines)
+            visible_height: Height of visible editor area for scroll adjustment
+        """
+        if not text:
+            return
+
+        # Split pasted text into lines
+        paste_lines = text.split('\n')
+
+        if len(paste_lines) == 1:
+            # Single line paste - insert into current line
+            line = self.lines[self.cursor_row]
+            self.lines[self.cursor_row] = (
+                line[:self.cursor_col] + paste_lines[0] + line[self.cursor_col:]
+            )
+            self.cursor_col += len(paste_lines[0])
+        else:
+            # Multi-line paste
+            current_line = self.lines[self.cursor_row]
+            before_cursor = current_line[:self.cursor_col]
+            after_cursor = current_line[self.cursor_col:]
+
+            # First line: append to text before cursor
+            self.lines[self.cursor_row] = before_cursor + paste_lines[0]
+
+            # Insert middle lines
+            for i, line in enumerate(paste_lines[1:-1], start=1):
+                self.lines.insert(self.cursor_row + i, line)
+
+            # Last line: prepend to text after cursor
+            final_line_content = paste_lines[-1] + after_cursor
+            self.lines.insert(self.cursor_row + len(paste_lines) - 1, final_line_content)
+
+            # Move cursor to end of pasted content
+            self.cursor_row += len(paste_lines) - 1
+            self.cursor_col = len(paste_lines[-1])
+
+        self.mark_dirty()
+
+        # Adjust scroll if visible_height provided
+        if visible_height is not None:
+            self.adjust_scroll(visible_height)
+
     def delete_char_at_cursor(self):
         """Delete character at cursor position"""
         line = self.lines[self.cursor_row]

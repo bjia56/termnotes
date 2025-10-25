@@ -4,6 +4,7 @@ Key binding handlers for different modes
 
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.filters import Condition
+from prompt_toolkit.keys import Keys
 from .editor import EditorBuffer
 from .modes import ModeManager
 from .note_list import NoteListManager
@@ -465,6 +466,23 @@ def create_key_bindings(
         """Insert any printable character in insert mode"""
         if len(event.data) == 1 and event.data.isprintable():
             buffer.insert_char(event.data)
+
+    # ===== BRACKETED PASTE (NATIVE TERMINAL PASTE) =====
+
+    @kb.add(Keys.BracketedPaste, filter=is_editor_focused & is_insert_mode)
+    def paste_from_terminal(event):
+        """Handle native terminal paste (Ctrl+Shift+V, right-click in terminal)"""
+        if not focus_manager.is_editor_focused():
+            return
+
+        pasted_text = event.data
+
+        if mode_manager.is_insert_mode():
+            buffer.paste_text(pasted_text, ui.editor_window_height)
+        elif mode_manager.is_normal_mode() and not mode_manager.command_buffer:
+            # Auto-enter insert mode on paste
+            mode_manager.enter_insert_mode()
+            buffer.paste_text(pasted_text, ui.editor_window_height)
 
     # Additional normal mode bindings to clear command buffer on other keys
     @kb.add('escape', filter=is_normal_mode & ~is_command_mode)
