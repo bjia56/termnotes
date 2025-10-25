@@ -56,8 +56,10 @@ def create_key_bindings(
 
     @kb.add('o', filter=is_sidebar_focused & is_normal_mode)
     def sidebar_create_note(event):
-        """Create a new empty note from sidebar"""
+        """Create a new empty note from sidebar, focus editor, and enter Insert mode"""
         ui.create_new_note()
+        # Enter Insert mode after creating the note
+        mode_manager.enter_insert_mode()
 
     @kb.add('d', filter=is_sidebar_focused & is_normal_mode & ~is_command_mode)
     def sidebar_delete_first_d(event):
