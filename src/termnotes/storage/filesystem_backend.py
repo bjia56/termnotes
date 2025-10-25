@@ -4,7 +4,6 @@ Filesystem-based note storage backend using JSON files
 
 import json
 import os
-import uuid
 from pathlib import Path
 from typing import List, Optional
 from datetime import datetime

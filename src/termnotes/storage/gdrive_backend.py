@@ -3,7 +3,6 @@ Google Drive-based note storage backend
 """
 
 import os
-import uuid
 from io import BytesIO
 from pathlib import Path
 from typing import List, Optional, Dict
