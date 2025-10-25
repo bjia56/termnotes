@@ -6,7 +6,6 @@ import re
 from prompt_toolkit.application import Application
 from prompt_toolkit.layout import Layout, HSplit, VSplit, Window, FormattedTextControl
 from prompt_toolkit.formatted_text import FormattedText
-from prompt_toolkit.key_binding import KeyBindings
 from pygments import lex
 from pygments.lexers import get_lexer_by_name
 from pygments.lexers.special import TextLexer
