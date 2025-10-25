@@ -19,6 +19,7 @@ class NoteListManager:
         """
         self.storage = storage
         self.notes: List[Note] = []
+        self.in_memory_note: Optional[Note] = None  # Track unsaved new note
         self.selected_index: int = 0
         self.reload_notes()
 
@@ -29,11 +30,18 @@ class NoteListManager:
         if self.selected_index >= len(self.notes):
             self.selected_index = max(0, len(self.notes) - 1)
 
+    def get_all_notes_including_memory(self) -> List[Note]:
+        """Get all notes including the in-memory note if present"""
+        if self.in_memory_note:
+            return [self.in_memory_note] + self.notes
+        return self.notes
+
     @property
     def selected_note(self) -> Optional[Note]:
         """Get the currently selected note"""
-        if 0 <= self.selected_index < len(self.notes):
-            return self.notes[self.selected_index]
+        all_notes = self.get_all_notes_including_memory()
+        if 0 <= self.selected_index < len(all_notes):
+            return all_notes[self.selected_index]
         return None
 
     def move_selection_up(self):
@@ -43,15 +51,27 @@ class NoteListManager:
 
     def move_selection_down(self):
         """Move selection down in the list"""
-        if self.selected_index < len(self.notes) - 1:
+        all_notes = self.get_all_notes_including_memory()
+        if self.selected_index < len(all_notes) - 1:
             self.selected_index += 1
 
     def get_note_count(self) -> int:
         """Get total number of notes"""
-        return len(self.notes)
+        return len(self.get_all_notes_including_memory())
 
     def get_note_at_index(self, index: int) -> Optional[Note]:
         """Get note at specified index"""
-        if 0 <= index < len(self.notes):
-            return self.notes[index]
+        all_notes = self.get_all_notes_including_memory()
+        if 0 <= index < len(all_notes):
+            return all_notes[index]
         return None
+
+    def set_in_memory_note(self, note: Optional[Note]):
+        """Set the in-memory note and select it"""
+        self.in_memory_note = note
+        if note:
+            self.selected_index = 0  # Select the in-memory note (always at top)
+
+    def clear_in_memory_note(self):
+        """Clear the in-memory note"""
+        self.in_memory_note = None

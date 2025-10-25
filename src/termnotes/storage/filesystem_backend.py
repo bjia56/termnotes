@@ -76,15 +76,6 @@ class FilesystemBackend(StorageBackend):
         with open(note_path, 'w') as f:
             json.dump(data, f, indent=2)
 
-    def create_note(self) -> Note:
-        """Create a new empty note with a unique ID"""
-        # Generate a UUID v4 for the note
-        note_id = str(uuid.uuid4())
-
-        note = Note(note_id=note_id, content="")
-        self.save_note(note)
-        return note
-
     def delete_note(self, note_id: str):
         """Delete a note by ID"""
         note_path = self._get_note_path(note_id)

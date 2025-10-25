@@ -73,20 +73,6 @@ class CompositeBackend(StorageBackend):
         # Save to persistent storage (slower but durable)
         self.persistent.save_note(note)
 
-    def create_note(self) -> Note:
-        """
-        Create a new note in both cache and persistent storage
-
-        Uses persistent backend's ID generation to ensure uniqueness
-        """
-        # Create in persistent storage first (authoritative ID generation)
-        note = self.persistent.create_note()
-
-        # Add to cache
-        self.cache.save_note(note)
-
-        return note
-
     def delete_note(self, note_id: str):
         """Delete note from both cache and persistent storage"""
         self.cache.delete_note(note_id)

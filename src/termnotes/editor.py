@@ -28,6 +28,7 @@ class EditorBuffer:
         self.horizontal_scroll_offset: int = 0  # Leftmost column currently displayed
         self.is_dirty: bool = False  # Track if buffer has unsaved changes
         self.current_note_id: str = None  # Track which note is currently loaded
+        self.is_new_unsaved: bool = False  # Track if this is a new note not yet in storage
         self.mode_manager = mode_manager  # Reference to mode manager for mode-aware cursor behavior
 
     @property
@@ -173,13 +174,14 @@ class EditorBuffer:
         """Mark buffer as saved (no unsaved changes)"""
         self.is_dirty = False
 
-    def load_content(self, content: str, note_id: str = None):
+    def load_content(self, content: str, note_id: str = None, is_new: bool = False):
         """
         Load new content into buffer
 
         Args:
             content: Text content to load
             note_id: ID of the note being loaded
+            is_new: Whether this is a new unsaved note (not yet in storage)
         """
         if content:
             self.lines = content.split('\n')
@@ -192,6 +194,7 @@ class EditorBuffer:
         self.horizontal_scroll_offset = 0
         self.current_note_id = note_id
         self.is_dirty = False
+        self.is_new_unsaved = is_new
 
     # Cursor movement
     def move_cursor_left(self):

@@ -283,13 +283,6 @@ class GoogleDriveBackend(StorageBackend):
         except HttpError as e:
             raise Exception(f"Failed to save note {note.id}: {e}")
 
-    def create_note(self) -> Note:
-        """Create a new empty note with a unique ID"""
-        note_id = str(uuid.uuid4())
-        note = Note(note_id=note_id, content="")
-        self.save_note(note)
-        return note
-
     def delete_note(self, note_id: str):
         """Delete a note from Google Drive"""
         # Get file ID

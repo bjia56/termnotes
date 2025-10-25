@@ -59,6 +59,13 @@ class EditorUI:
             )
             self.storage.save_note(note)
             self.buffer.mark_clean()
+
+            # If this was a new unsaved note, it's now in storage
+            if self.buffer.is_new_unsaved:
+                self.buffer.is_new_unsaved = False
+                # Clear the in-memory note from sidebar
+                self.note_list_manager.clear_in_memory_note()
+
             self.note_list_manager.reload_notes()
 
             # Update selection to point to the saved note (now at top of list)
@@ -79,10 +86,13 @@ class EditorUI:
         Args:
             note: The note to load
         """
-        if self.buffer.is_dirty:
+        if self.buffer.is_dirty or self.buffer.is_new_unsaved:
             # Store pending switch and prompt user
             self.pending_note_switch = note
-            self.mode_manager.set_message("Unsaved changes! :w to save, :e! to discard and load")
+            if self.buffer.is_new_unsaved:
+                self.mode_manager.set_message("New note not saved! :w to save, :e! to discard and load")
+            else:
+                self.mode_manager.set_message("Unsaved changes! :w to save, :e! to discard and load")
         else:
             # Load the note
             self.buffer.load_content(note.content, note.id)
@@ -90,38 +100,40 @@ class EditorUI:
 
     def force_load_note(self, note: Note):
         """Force load a note, discarding any unsaved changes"""
+        # If we're discarding an in-memory note, clear it from sidebar
+        if self.buffer.is_new_unsaved:
+            self.note_list_manager.clear_in_memory_note()
+
         self.buffer.load_content(note.content, note.id)
         self.pending_note_switch = None
         self.mode_manager.clear_message()
 
     def create_new_note(self):
         """Create a new empty note and load it into the editor"""
-        if self.buffer.is_dirty:
+        if self.buffer.is_dirty or self.buffer.is_new_unsaved:
             # Store that we want to create a new note
             self.pending_note_switch = "NEW_NOTE"
-            self.mode_manager.set_message("Unsaved changes! :w to save, :e! to discard and create new")
+            if self.buffer.is_new_unsaved:
+                self.mode_manager.set_message("New note not saved! :w to save, :e! to discard and create new")
+            else:
+                self.mode_manager.set_message("Unsaved changes! :w to save, :e! to discard and create new")
         else:
             self._do_create_new_note()
 
     def _do_create_new_note(self):
         """Internal method to actually create and load a new note"""
-        # Create new note with storage backend
+        # Clear any existing in-memory note first (if we're replacing it)
+        self.note_list_manager.clear_in_memory_note()
+
+        # Create new note ID (but don't save to storage yet)
         new_note = self.storage.create_note()
 
-        # Save the empty note
-        self.storage.save_note(new_note)
+        # Add to note list manager as in-memory note
+        self.note_list_manager.set_in_memory_note(new_note)
 
-        # Reload note list to include new note
-        self.note_list_manager.reload_notes()
-
-        # Load new note into editor
-        self.buffer.load_content(new_note.content, new_note.id)
-
-        # Update selection to point to the new note (at top of list since just created)
-        for i, n in enumerate(self.note_list_manager.notes):
-            if n.id == new_note.id:
-                self.note_list_manager.selected_index = i
-                break
+        # Load empty note into editor with is_new flag
+        # This marks it as in-memory only until first save
+        self.buffer.load_content(new_note.content, new_note.id, is_new=True)
 
         # Switch focus to editor
         self.focus_manager.switch_to_editor()
@@ -137,6 +149,23 @@ class EditorUI:
         Args:
             note_id: ID of the note to delete
         """
+        # Check if this is the in-memory note
+        if (self.note_list_manager.in_memory_note and
+            self.note_list_manager.in_memory_note.id == note_id):
+            # Just discard the in-memory note
+            self.note_list_manager.clear_in_memory_note()
+            self.buffer.load_content("", None)
+            self.pending_deletion = None
+            self.mode_manager.set_message("New note discarded")
+
+            # Select first saved note if available
+            if self.note_list_manager.notes:
+                self.note_list_manager.selected_index = 0
+                selected_note = self.note_list_manager.selected_note
+                if selected_note:
+                    self.buffer.load_content(selected_note.content, selected_note.id)
+            return
+
         # Delete from storage
         self.storage.delete_note(note_id)
 
@@ -549,8 +578,14 @@ class EditorUI:
         """Get formatted text for sidebar showing note list"""
         result = []
 
-        for i, note in enumerate(self.note_list_manager.notes):
+        all_notes = self.note_list_manager.get_all_notes_including_memory()
+        for i, note in enumerate(all_notes):
             preview = note.get_preview(25)
+
+            # Add [NEW] indicator for in-memory note
+            is_in_memory = (i == 0 and self.note_list_manager.in_memory_note is not None)
+            if is_in_memory:
+                preview = f"[NEW] {preview}"
 
             # Highlight selected note
             if i == self.note_list_manager.selected_index:
@@ -565,7 +600,7 @@ class EditorUI:
                 result.append(('', f"  {preview}"))
 
             # Add newline except for last item
-            if i < len(self.note_list_manager.notes) - 1:
+            if i < len(all_notes) - 1:
                 result.append(('', '\n'))
 
         return FormattedText(result)
@@ -585,8 +620,13 @@ class EditorUI:
         # Focus indicator
         focus_str = f"[{self.focus_manager.get_focus_name()}]"
 
-        # Dirty indicator
-        dirty_str = "[+]" if self.buffer.is_dirty else ""
+        # Dirty/new indicator
+        if self.buffer.is_new_unsaved:
+            dirty_str = "[NEW]"
+        elif self.buffer.is_dirty:
+            dirty_str = "[+]"
+        else:
+            dirty_str = ""
 
         # Cursor position (right side)
         row = self.buffer.cursor_row + 1

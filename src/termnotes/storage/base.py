@@ -4,6 +4,7 @@ Abstract base class for storage backends
 
 from abc import ABC, abstractmethod
 from typing import List, Optional
+import uuid
 from ..note import Note
 
 
@@ -43,15 +44,12 @@ class StorageBackend(ABC):
         """
         pass
 
-    @abstractmethod
     def create_note(self) -> Note:
-        """
-        Create a new empty note with a unique ID
-
-        Returns:
-            Newly created Note object
-        """
-        pass
+        """Create a new empty note with a unique ID"""
+        # Generate a UUID v4 for the note
+        note_id = str(uuid.uuid4())
+        note = Note(note_id=note_id, content="")
+        return note
 
     @abstractmethod
     def delete_note(self, note_id: str):
