@@ -3,6 +3,7 @@ SQLite-based note storage backend
 """
 
 import sqlite3
+from pathlib import Path
 from typing import List, Optional
 from datetime import datetime
 from .base import StorageBackend
@@ -21,6 +22,12 @@ class SQLiteBackend(StorageBackend):
             db_path: Path to SQLite database file, or ":memory:" for in-memory DB
         """
         self.db_path = db_path
+
+        # Create parent directory if path is not in-memory
+        if db_path != ":memory:":
+            db_file = Path(db_path)
+            db_file.parent.mkdir(parents=True, exist_ok=True)
+
         self.conn = sqlite3.connect(db_path)
         self._create_tables()
 

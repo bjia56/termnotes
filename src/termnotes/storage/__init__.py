@@ -15,6 +15,7 @@ from .filesystem_backend import FilesystemBackend
 from .composite_backend import CompositeBackend
 from .gdrive_backend import GoogleDriveBackend
 from ..note import Note
+from ..config import get_config
 
 # Backward compatibility alias
 NoteStorage = SQLiteBackend
@@ -26,15 +27,31 @@ def create_default_storage() -> StorageBackend:
 
     Returns a composite backend with:
     - SQLite in-memory cache (fast reads/writes)
-    - Filesystem persistent storage (durable)
+    - Configured persistent storage (filesystem, sqlite, or gdrive)
 
     If the storage is empty, populates it with a welcome note.
 
     Returns:
-        CompositeBackend configured with SQLite cache + filesystem storage
+        CompositeBackend configured with SQLite cache + persistent storage
     """
+    config = get_config()
     cache = SQLiteBackend(":memory:")
-    persistent = FilesystemBackend()  # Uses ~/.termnotes/notes by default
+
+    # Create persistent backend based on configuration
+    backend_type = config.storage_backend
+
+    if backend_type == "sqlite":
+        persistent = SQLiteBackend(config.sqlite_path)
+    elif backend_type == "gdrive":
+        persistent = GoogleDriveBackend(
+            credentials_path=config.gdrive_credentials_path,
+            token_path=config.gdrive_token_path,
+            app_folder=config.gdrive_folder_name
+        )
+    elif backend_type == "filesystem":
+        persistent = FilesystemBackend(config.filesystem_directory)
+    else:
+        raise ValueError(f"Unknown storage backend: {backend_type}")
 
     storage = CompositeBackend(cache, persistent)
 

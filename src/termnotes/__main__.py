@@ -3,27 +3,26 @@ Entry point for termnotes editor
 """
 
 import sys
+import argparse
 from .ui import EditorUI
+from .config import get_example_config
 
 
 def main():
     """Main entry point for the editor"""
-    # Check if a file argument was provided
-    initial_text = ""
-    if len(sys.argv) > 1:
-        filename = sys.argv[1]
-        try:
-            with open(filename, 'r') as f:
-                initial_text = f.read()
-        except FileNotFoundError:
-            # File doesn't exist, start with empty buffer
-            pass
-        except Exception as e:
-            print(f"Error reading file: {e}", file=sys.stderr)
-            sys.exit(1)
+    parser = argparse.ArgumentParser(description="A vim-like terminal note-taking application")
+    parser.add_argument("--print-config", action="store_true",
+                       help="Print example configuration and exit")
+
+    args = parser.parse_args()
+
+    # Handle --print-config flag
+    if args.print_config:
+        print(get_example_config())
+        sys.exit(0)
 
     # Create and run the editor
-    editor = EditorUI(initial_text)
+    editor = EditorUI()
     try:
         editor.run()
     except KeyboardInterrupt:
