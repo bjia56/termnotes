@@ -192,7 +192,7 @@ def create_key_bindings(
 
     @kb.add('n', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
     def repeat_search(event):
-        """Repeat last search in same direction"""
+        """Repeat last search in same direction in editor"""
         if mode_manager.last_search:
             if mode_manager.last_search_direction == "forward":
                 found = buffer.search_forward(mode_manager.last_search, ui.editor_window_height)
@@ -208,12 +208,44 @@ def create_key_bindings(
 
     @kb.add('N', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
     def repeat_search_opposite(event):
-        """Repeat last search in opposite direction"""
+        """Repeat last search in opposite direction in editor"""
         if mode_manager.last_search:
             if mode_manager.last_search_direction == "forward":
                 found = buffer.search_backward(mode_manager.last_search, ui.editor_window_height)
             else:
                 found = buffer.search_forward(mode_manager.last_search, ui.editor_window_height)
+            if not found:
+                mode_manager.set_message(f"Pattern not found: {mode_manager.last_search}")
+            else:
+                mode_manager.clear_message()
+        else:
+            mode_manager.set_message("No previous search pattern")
+        mode_manager.clear_command_buffer()
+
+    @kb.add('n', filter=is_sidebar_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
+    def sidebar_search_next(event):
+        """Jump to next note matching search in sidebar"""
+        if mode_manager.last_search:
+            if mode_manager.last_search_direction == "forward":
+                found = note_list_manager.search_next()
+            else:
+                found = note_list_manager.search_previous()
+            if not found:
+                mode_manager.set_message(f"Pattern not found: {mode_manager.last_search}")
+            else:
+                mode_manager.clear_message()
+        else:
+            mode_manager.set_message("No previous search pattern")
+        mode_manager.clear_command_buffer()
+
+    @kb.add('N', filter=is_sidebar_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
+    def sidebar_search_previous(event):
+        """Jump to previous note matching search in sidebar"""
+        if mode_manager.last_search:
+            if mode_manager.last_search_direction == "forward":
+                found = note_list_manager.search_previous()
+            else:
+                found = note_list_manager.search_next()
             if not found:
                 mode_manager.set_message(f"Pattern not found: {mode_manager.last_search}")
             else:
@@ -271,16 +303,26 @@ def create_key_bindings(
         """Enter command mode"""
         mode_manager.add_to_command_buffer(':')
 
-    # ===== SEARCH MODE (editor only) =====
+    # ===== SEARCH MODE (editor and sidebar) =====
 
     @kb.add('/', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
     def search_forward_mode(event):
-        """Enter forward search mode"""
+        """Enter forward search mode in editor"""
         mode_manager.start_search_forward()
 
     @kb.add('?', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
     def search_backward_mode(event):
-        """Enter backward search mode"""
+        """Enter backward search mode in editor"""
+        mode_manager.start_search_backward()
+
+    @kb.add('/', filter=is_sidebar_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
+    def sidebar_search_forward_mode(event):
+        """Enter forward search mode in sidebar"""
+        mode_manager.start_search_forward()
+
+    @kb.add('?', filter=is_sidebar_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
+    def sidebar_search_backward_mode(event):
+        """Enter backward search mode in sidebar"""
         mode_manager.start_search_backward()
 
     @kb.add('enter', filter=is_search_mode)
@@ -290,14 +332,23 @@ def create_key_bindings(
         mode_manager.execute_search()
         # Perform the search
         if mode_manager.search_query:
-            if is_forward:
-                found = buffer.search_forward(mode_manager.search_query, ui.editor_window_height)
+            if focus_manager.is_sidebar_focused():
+                # Search across notes in sidebar
+                found = note_list_manager.search_notes(mode_manager.search_query)
+                if not found:
+                    mode_manager.set_message(f"Pattern not found: {mode_manager.search_query}")
+                else:
+                    mode_manager.clear_message()
             else:
-                found = buffer.search_backward(mode_manager.search_query, ui.editor_window_height)
-            if not found:
-                mode_manager.set_message(f"Pattern not found: {mode_manager.search_query}")
-            else:
-                mode_manager.clear_message()
+                # Search within current note in editor
+                if is_forward:
+                    found = buffer.search_forward(mode_manager.search_query, ui.editor_window_height)
+                else:
+                    found = buffer.search_backward(mode_manager.search_query, ui.editor_window_height)
+                if not found:
+                    mode_manager.set_message(f"Pattern not found: {mode_manager.search_query}")
+                else:
+                    mode_manager.clear_message()
         else:
             mode_manager.clear_message()
 

@@ -23,6 +23,10 @@ class NoteListManager:
         self.selected_index: int = 0
         self.reload_notes()
 
+        # Search state for sidebar search
+        self.search_matches: List[int] = []  # Indices of notes matching search
+        self.current_match_index: int = -1  # Index in search_matches list
+
     def reload_notes(self):
         """Reload notes from storage"""
         self.notes = self.storage.get_all_notes()
@@ -75,3 +79,70 @@ class NoteListManager:
     def clear_in_memory_note(self):
         """Clear the in-memory note"""
         self.in_memory_note = None
+
+    def search_notes(self, query: str) -> bool:
+        """
+        Search for query across all note contents and store matching indices.
+
+        Args:
+            query: Search string
+
+        Returns:
+            True if any matches found, False otherwise
+        """
+        if not query:
+            self.search_matches = []
+            self.current_match_index = -1
+            return False
+
+        self.search_matches = []
+        all_notes = self.get_all_notes_including_memory()
+
+        # Find all notes containing the query (case-insensitive)
+        query_lower = query.lower()
+        for i, note in enumerate(all_notes):
+            if query_lower in note.content.lower():
+                self.search_matches.append(i)
+
+        if self.search_matches:
+            self.current_match_index = 0
+            self.selected_index = self.search_matches[0]
+            return True
+        else:
+            self.current_match_index = -1
+            return False
+
+    def search_next(self) -> bool:
+        """
+        Jump to next search match.
+
+        Returns:
+            True if a match was found, False otherwise
+        """
+        if not self.search_matches:
+            return False
+
+        # Move to next match (wrap around)
+        self.current_match_index = (self.current_match_index + 1) % len(self.search_matches)
+        self.selected_index = self.search_matches[self.current_match_index]
+        return True
+
+    def search_previous(self) -> bool:
+        """
+        Jump to previous search match.
+
+        Returns:
+            True if a match was found, False otherwise
+        """
+        if not self.search_matches:
+            return False
+
+        # Move to previous match (wrap around)
+        self.current_match_index = (self.current_match_index - 1) % len(self.search_matches)
+        self.selected_index = self.search_matches[self.current_match_index]
+        return True
+
+    def clear_search(self):
+        """Clear search state"""
+        self.search_matches = []
+        self.current_match_index = -1
