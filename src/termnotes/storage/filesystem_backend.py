@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import List, Optional
 from datetime import datetime
 from .base import StorageBackend
+from ..utils import utc_now
 from ..note import Note
 
 
@@ -67,7 +68,7 @@ class FilesystemBackend(StorageBackend):
     def save_note(self, note: Note):
         """Save or update a note"""
         # Update the updated_at timestamp
-        note.updated_at = datetime.now()
+        note.updated_at = utc_now()
 
         note_path = self._get_note_path(note.id)
         data = self._note_to_dict(note)

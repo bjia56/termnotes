@@ -7,6 +7,7 @@ import uuid
 from typing import List, Optional
 from datetime import datetime
 from .base import StorageBackend
+from ..utils import utc_now
 from ..note import Note
 
 
@@ -109,4 +110,4 @@ class SQLiteBackend(StorageBackend):
         try:
             return datetime.fromisoformat(ts_str)
         except (ValueError, TypeError):
-            return datetime.now()
+            return utc_now()

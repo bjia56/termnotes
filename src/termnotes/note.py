@@ -4,6 +4,7 @@ Note data model
 
 from typing import Optional
 from datetime import datetime
+from .utils import utc_now
 
 
 class Note:
@@ -27,8 +28,8 @@ class Note:
         """
         self.id = note_id
         self.content = content
-        self.created_at = created_at or datetime.now()
-        self.updated_at = updated_at or datetime.now()
+        self.created_at = created_at or utc_now()
+        self.updated_at = updated_at or utc_now()
 
     def get_preview(self, max_length: int = 25) -> str:
         """

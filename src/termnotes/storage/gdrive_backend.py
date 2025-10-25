@@ -11,6 +11,7 @@ from datetime import datetime
 
 from docx import Document
 
+from ..utils import utc_now, normalize_to_utc
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -234,7 +235,7 @@ class GoogleDriveBackend(StorageBackend):
     def save_note(self, note: Note):
         """Save or update a note in Google Drive"""
         # Update timestamp
-        note.updated_at = datetime.now()
+        note.updated_at = utc_now()
 
         # Convert to DOCX
         docx_bytes = self._note_to_docx(note)
@@ -348,8 +349,12 @@ class GoogleDriveBackend(StorageBackend):
 
         # Extract metadata from core properties
         note_id = doc.core_properties.title or str(uuid.uuid4())
-        created_at = doc.core_properties.created or datetime.now()
-        updated_at = doc.core_properties.modified or datetime.now()
+        created_at = doc.core_properties.created or utc_now()
+        updated_at = doc.core_properties.modified or utc_now()
+
+        # Normalize datetimes to UTC (DOCX files may have timezone-aware timestamps)
+        created_at = normalize_to_utc(created_at)
+        updated_at = normalize_to_utc(updated_at)
 
         # Extract text directly from paragraphs to preserve markdown
         # Each paragraph in DOCX corresponds to a line in the original markdown
