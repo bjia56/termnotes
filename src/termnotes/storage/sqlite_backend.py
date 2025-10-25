@@ -3,7 +3,6 @@ SQLite-based note storage backend
 """
 
 import sqlite3
-import uuid
 from typing import List, Optional
 from datetime import datetime
 from .base import StorageBackend
