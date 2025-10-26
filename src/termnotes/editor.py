@@ -10,6 +10,7 @@ class Mode(Enum):
     """Editor modes"""
     NORMAL = "NORMAL"
     INSERT = "INSERT"
+    VISUAL = "VISUAL"
 
 
 class EditorBuffer:
@@ -30,6 +31,7 @@ class EditorBuffer:
         self.current_note_id: str = None  # Track which note is currently loaded
         self.is_new_unsaved: bool = False  # Track if this is a new note not yet in storage
         self.mode_manager = mode_manager  # Reference to mode manager for mode-aware cursor behavior
+        self.yank_register: str = ""  # Store yanked text for paste operations
 
     @property
     def current_line(self) -> str:
@@ -595,3 +597,100 @@ class EditorBuffer:
                 return True
 
         return False
+
+    # Visual mode operations
+    def get_selection_text(self, start_row: int, start_col: int, end_row: int, end_col: int) -> str:
+        """
+        Get the text within the selection range
+
+        Args:
+            start_row: Starting row of selection
+            start_col: Starting column of selection
+            end_row: Ending row of selection
+            end_col: Ending column of selection
+
+        Returns:
+            The selected text as a string
+        """
+        if start_row == end_row:
+            # Single line selection
+            return self.lines[start_row][start_col:end_col + 1]
+        else:
+            # Multi-line selection
+            result = []
+            # First line: from start_col to end
+            result.append(self.lines[start_row][start_col:])
+            # Middle lines: entire lines
+            for row in range(start_row + 1, end_row):
+                result.append(self.lines[row])
+            # Last line: from start to end_col
+            result.append(self.lines[end_row][:end_col + 1])
+            return '\n'.join(result)
+
+    def yank_selection(self, start_row: int, start_col: int, end_row: int, end_col: int):
+        """
+        Yank (copy) the selected text to the yank register
+
+        Args:
+            start_row: Starting row of selection
+            start_col: Starting column of selection
+            end_row: Ending row of selection
+            end_col: Ending column of selection
+        """
+        self.yank_register = self.get_selection_text(start_row, start_col, end_row, end_col)
+
+    def delete_selection(self, start_row: int, start_col: int, end_row: int, end_col: int, visible_height: int = None):
+        """
+        Delete the selected text
+
+        Args:
+            start_row: Starting row of selection
+            start_col: Starting column of selection
+            end_row: Ending row of selection
+            end_col: Ending column of selection
+            visible_height: Height of visible editor area for scroll adjustment
+        """
+        if start_row == end_row:
+            # Single line deletion
+            line = self.lines[start_row]
+            self.lines[start_row] = line[:start_col] + line[end_col + 1:]
+            self.cursor_row = start_row
+            self.cursor_col = start_col
+        else:
+            # Multi-line deletion
+            # Combine the part before selection on first line with part after selection on last line
+            first_line_before = self.lines[start_row][:start_col]
+            last_line_after = self.lines[end_row][end_col + 1:]
+            combined_line = first_line_before + last_line_after
+
+            # Delete all lines in the selection range
+            del self.lines[start_row:end_row + 1]
+
+            # Insert the combined line
+            self.lines.insert(start_row, combined_line)
+
+            # Position cursor at start of deletion
+            self.cursor_row = start_row
+            self.cursor_col = start_col
+
+        # Ensure cursor is in valid position
+        self.cursor_col = min(self.cursor_col, self.get_max_cursor_col())
+
+        self.mark_dirty()
+
+        # Adjust scroll if visible_height provided
+        if visible_height is not None:
+            self.adjust_scroll(visible_height)
+
+    def paste_from_register(self, visible_height: int = None):
+        """
+        Paste text from yank register at cursor position
+
+        Args:
+            visible_height: Height of visible editor area for scroll adjustment
+        """
+        if not self.yank_register:
+            return
+
+        # Use the existing paste_text method
+        self.paste_text(self.yank_register, visible_height)

@@ -24,6 +24,7 @@ def create_key_bindings(
     # Create filter conditions
     is_normal_mode = Condition(lambda: mode_manager.is_normal_mode())
     is_insert_mode = Condition(lambda: mode_manager.is_insert_mode())
+    is_visual_mode = Condition(lambda: mode_manager.is_visual_mode())
     is_command_mode = Condition(lambda: mode_manager.command_buffer.startswith(':'))
     is_search_mode = Condition(lambda: mode_manager.is_search_mode())
     is_sidebar_focused = Condition(lambda: focus_manager.is_sidebar_focused())
@@ -192,6 +193,33 @@ def create_key_bindings(
         buffer.delete_char_at_cursor()
         mode_manager.clear_command_buffer()
 
+    @kb.add('p', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
+    def paste_after(event):
+        """Paste from yank register after cursor"""
+        if buffer.yank_register:
+            # Move cursor right before pasting (paste after current position)
+            buffer.move_cursor_right()
+            buffer.paste_from_register(ui.editor_window_height)
+            mode_manager.clear_message()
+        else:
+            mode_manager.set_message("Nothing in register to paste")
+        mode_manager.clear_command_buffer()
+
+    @kb.add('P', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
+    def paste_before(event):
+        """Paste from yank register before cursor"""
+        if buffer.yank_register:
+            buffer.paste_from_register(ui.editor_window_height)
+            mode_manager.clear_message()
+        else:
+            mode_manager.set_message("Nothing in register to paste")
+        mode_manager.clear_command_buffer()
+
+    @kb.add('v', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
+    def enter_visual_mode(event):
+        """Enter visual mode"""
+        mode_manager.enter_visual_mode(buffer.cursor_row, buffer.cursor_col)
+
     @kb.add('n', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
     def repeat_search(event):
         """Repeat last search in same direction in editor"""
@@ -256,6 +284,106 @@ def create_key_bindings(
             mode_manager.set_message("No previous search pattern")
         mode_manager.clear_command_buffer()
 
+    # ===== VISUAL MODE BINDINGS (EDITOR ONLY) =====
+
+    @kb.add('escape', filter=is_editor_focused & is_visual_mode)
+    @kb.add('v', filter=is_editor_focused & is_visual_mode)
+    def exit_visual_mode(event):
+        """Exit visual mode back to normal mode"""
+        mode_manager.enter_normal_mode()
+        buffer.clamp_cursor()
+
+    # Visual mode movement (extends selection)
+    @kb.add('h', filter=is_editor_focused & is_visual_mode)
+    @kb.add('left', filter=is_editor_focused & is_visual_mode)
+    def visual_move_left(event):
+        """Move cursor left in visual mode"""
+        buffer.move_cursor_left()
+
+    @kb.add('j', filter=is_editor_focused & is_visual_mode)
+    @kb.add('down', filter=is_editor_focused & is_visual_mode)
+    def visual_move_down(event):
+        """Move cursor down in visual mode"""
+        buffer.move_cursor_down(ui.editor_window_height)
+
+    @kb.add('k', filter=is_editor_focused & is_visual_mode)
+    @kb.add('up', filter=is_editor_focused & is_visual_mode)
+    def visual_move_up(event):
+        """Move cursor up in visual mode"""
+        buffer.move_cursor_up(ui.editor_window_height)
+
+    @kb.add('l', filter=is_editor_focused & is_visual_mode)
+    @kb.add('right', filter=is_editor_focused & is_visual_mode)
+    def visual_move_right(event):
+        """Move cursor right in visual mode"""
+        buffer.move_cursor_right()
+
+    @kb.add('0', filter=is_editor_focused & is_visual_mode)
+    @kb.add('home', filter=is_editor_focused & is_visual_mode)
+    def visual_move_line_start(event):
+        """Move to start of line in visual mode"""
+        buffer.move_cursor_to_line_start()
+
+    @kb.add('$', filter=is_editor_focused & is_visual_mode)
+    @kb.add('end', filter=is_editor_focused & is_visual_mode)
+    def visual_move_line_end(event):
+        """Move to end of line in visual mode"""
+        buffer.move_cursor_to_line_end()
+
+    @kb.add('c-d', filter=is_editor_focused & is_visual_mode)
+    def visual_half_page_down(event):
+        """Scroll down half a page in visual mode"""
+        buffer.half_page_down(ui.editor_window_height)
+
+    @kb.add('c-u', filter=is_editor_focused & is_visual_mode)
+    def visual_half_page_up(event):
+        """Scroll up half a page in visual mode"""
+        buffer.half_page_up(ui.editor_window_height)
+
+    @kb.add('pagedown', filter=is_editor_focused & is_visual_mode)
+    def visual_page_down(event):
+        """Scroll down one page in visual mode"""
+        buffer.page_down(ui.editor_window_height)
+
+    @kb.add('pageup', filter=is_editor_focused & is_visual_mode)
+    def visual_page_up(event):
+        """Scroll up one page in visual mode"""
+        buffer.page_up(ui.editor_window_height)
+
+    # Visual mode operations
+    @kb.add('d', filter=is_editor_focused & is_visual_mode)
+    @kb.add('x', filter=is_editor_focused & is_visual_mode)
+    def visual_delete(event):
+        """Delete selected text and return to normal mode"""
+        start_row, start_col, end_row, end_col = mode_manager.get_visual_selection(
+            buffer.cursor_row, buffer.cursor_col
+        )
+        buffer.yank_selection(start_row, start_col, end_row, end_col)
+        buffer.delete_selection(start_row, start_col, end_row, end_col, ui.editor_window_height)
+        mode_manager.enter_normal_mode()
+        buffer.clamp_cursor()
+
+    @kb.add('y', filter=is_editor_focused & is_visual_mode)
+    def visual_yank(event):
+        """Yank (copy) selected text and return to normal mode"""
+        start_row, start_col, end_row, end_col = mode_manager.get_visual_selection(
+            buffer.cursor_row, buffer.cursor_col
+        )
+        buffer.yank_selection(start_row, start_col, end_row, end_col)
+        mode_manager.enter_normal_mode()
+        buffer.clamp_cursor()
+        mode_manager.set_message(f"Yanked {end_row - start_row + 1} line(s)")
+
+    @kb.add('c', filter=is_editor_focused & is_visual_mode)
+    def visual_change(event):
+        """Delete selected text and enter insert mode"""
+        start_row, start_col, end_row, end_col = mode_manager.get_visual_selection(
+            buffer.cursor_row, buffer.cursor_col
+        )
+        buffer.yank_selection(start_row, start_col, end_row, end_col)
+        buffer.delete_selection(start_row, start_col, end_row, end_col, ui.editor_window_height)
+        mode_manager.enter_insert_mode()
+
     # ===== HORIZONTAL SCROLLING (NORMAL MODE, EDITOR FOCUSED) =====
 
     @kb.add('z', 'h', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
@@ -284,15 +412,15 @@ def create_key_bindings(
 
     # ===== FOCUS SWITCHING (CTRL+W combinations in NORMAL MODE) =====
 
-    @kb.add('c-w', 'h', filter=is_normal_mode)
-    @kb.add('c-w', 'left', filter=is_normal_mode)
+    @kb.add('c-w', 'h', filter=is_normal_mode & ~is_visual_mode)
+    @kb.add('c-w', 'left', filter=is_normal_mode & ~is_visual_mode)
     def switch_to_sidebar(event):
         """Switch focus to sidebar"""
         focus_manager.switch_to_sidebar()
         mode_manager.clear_command_buffer()
 
-    @kb.add('c-w', 'l', filter=is_normal_mode)
-    @kb.add('c-w', 'right', filter=is_normal_mode)
+    @kb.add('c-w', 'l', filter=is_normal_mode & ~is_visual_mode)
+    @kb.add('c-w', 'right', filter=is_normal_mode & ~is_visual_mode)
     def switch_to_editor(event):
         """Switch focus to editor"""
         focus_manager.switch_to_editor()
