@@ -11,6 +11,7 @@ class Mode(Enum):
     NORMAL = "NORMAL"
     INSERT = "INSERT"
     VISUAL = "VISUAL"
+    VISUAL_LINE = "VISUAL_LINE"
 
 
 class EditorBuffer:
@@ -32,6 +33,7 @@ class EditorBuffer:
         self.is_new_unsaved: bool = False  # Track if this is a new note not yet in storage
         self.mode_manager = mode_manager  # Reference to mode manager for mode-aware cursor behavior
         self.yank_register: str = ""  # Store yanked text for paste operations
+        self.yank_is_linewise: bool = False  # Track if yanked text is line-wise or character-wise
 
     @property
     def current_line(self) -> str:
@@ -638,6 +640,7 @@ class EditorBuffer:
             end_col: Ending column of selection
         """
         self.yank_register = self.get_selection_text(start_row, start_col, end_row, end_col)
+        self.yank_is_linewise = False
 
     def delete_selection(self, start_row: int, start_col: int, end_row: int, end_col: int, visible_height: int = None):
         """
@@ -682,15 +685,91 @@ class EditorBuffer:
         if visible_height is not None:
             self.adjust_scroll(visible_height)
 
-    def paste_from_register(self, visible_height: int = None):
+    def paste_from_register(self, after: bool = True, visible_height: int = None):
         """
         Paste text from yank register at cursor position
 
         Args:
+            after: If True, paste after cursor/line (p). If False, paste before (P)
             visible_height: Height of visible editor area for scroll adjustment
         """
         if not self.yank_register:
             return
 
-        # Use the existing paste_text method
-        self.paste_text(self.yank_register, visible_height)
+        if self.yank_is_linewise:
+            # Line-wise paste: insert complete lines
+            # Remove the trailing newline we added during yank
+            text_to_paste = self.yank_register.rstrip('\n')
+            lines_to_paste = text_to_paste.split('\n')
+
+            if after:
+                # Paste after current line (p)
+                insert_pos = self.cursor_row + 1
+            else:
+                # Paste before current line (P)
+                insert_pos = self.cursor_row
+
+            # Insert the lines
+            for i, line in enumerate(lines_to_paste):
+                self.lines.insert(insert_pos + i, line)
+
+            # Move cursor to first inserted line
+            self.cursor_row = insert_pos
+            self.cursor_col = 0
+
+            self.mark_dirty()
+
+            if visible_height is not None:
+                self.adjust_scroll(visible_height)
+        else:
+            # Character-wise paste: use existing paste_text method
+            if after:
+                # Move cursor right before pasting (paste after current position)
+                self.move_cursor_right()
+            self.paste_text(self.yank_register, visible_height)
+
+    # Visual line mode operations
+    def yank_lines(self, start_row: int, end_row: int):
+        """
+        Yank (copy) entire lines to the yank register
+
+        Args:
+            start_row: Starting row (inclusive)
+            end_row: Ending row (inclusive)
+        """
+        lines_to_yank = self.lines[start_row:end_row + 1]
+        # Join with newlines and add trailing newline to indicate line-wise yank
+        self.yank_register = '\n'.join(lines_to_yank) + '\n'
+        self.yank_is_linewise = True
+
+    def delete_lines(self, start_row: int, end_row: int, visible_height: int = None):
+        """
+        Delete entire lines
+
+        Args:
+            start_row: Starting row (inclusive)
+            end_row: Ending row (inclusive)
+            visible_height: Height of visible editor area for scroll adjustment
+        """
+        # Store the lines for yanking
+        self.yank_lines(start_row, end_row)
+
+        # Delete the lines
+        del self.lines[start_row:end_row + 1]
+
+        # If we deleted all lines, add an empty line
+        if not self.lines:
+            self.lines = [""]
+
+        # Position cursor at start of deletion
+        self.cursor_row = min(start_row, len(self.lines) - 1)
+        self.cursor_col = 0
+
+        # Ensure cursor is in valid position
+        self.cursor_col = min(self.cursor_col, self.get_max_cursor_col())
+
+        self.mark_dirty()
+
+        # Adjust scroll if visible_height provided
+        if visible_height is not None:
+            self.adjust_scroll(visible_height)

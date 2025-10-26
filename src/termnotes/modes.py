@@ -33,8 +33,16 @@ class ModeManager:
         return self.current_mode == Mode.INSERT
 
     def is_visual_mode(self) -> bool:
-        """Check if in visual mode"""
+        """Check if in visual mode (character-wise)"""
         return self.current_mode == Mode.VISUAL
+
+    def is_visual_line_mode(self) -> bool:
+        """Check if in visual line mode"""
+        return self.current_mode == Mode.VISUAL_LINE
+
+    def is_any_visual_mode(self) -> bool:
+        """Check if in any visual mode (character or line)"""
+        return self.current_mode in (Mode.VISUAL, Mode.VISUAL_LINE)
 
     def enter_insert_mode(self):
         """Enter insert mode"""
@@ -55,6 +63,18 @@ class ModeManager:
         self.current_mode = Mode.VISUAL
         self.visual_start_row = start_row
         self.visual_start_col = start_col
+        self.command_buffer = ""
+
+    def enter_visual_line_mode(self, start_row: int):
+        """
+        Enter visual line mode with the given starting row
+
+        Args:
+            start_row: Starting row of the selection
+        """
+        self.current_mode = Mode.VISUAL_LINE
+        self.visual_start_row = start_row
+        self.visual_start_col = 0  # Not used in line mode, but set for consistency
         self.command_buffer = ""
 
     def get_visual_selection(self, current_row: int, current_col: int):
@@ -80,6 +100,21 @@ class ModeManager:
             else:
                 return (current_row, current_col, self.visual_start_row, self.visual_start_col)
 
+    def get_visual_line_selection(self, current_row: int):
+        """
+        Get the visual line selection range (entire lines)
+
+        Args:
+            current_row: Current cursor row
+
+        Returns:
+            Tuple of (start_row, end_row) where start is always before end
+        """
+        if self.visual_start_row <= current_row:
+            return (self.visual_start_row, current_row)
+        else:
+            return (current_row, self.visual_start_row)
+
     def add_to_command_buffer(self, char: str):
         """Add a character to the command buffer (for multi-key commands)"""
         self.command_buffer += char
@@ -102,6 +137,8 @@ class ModeManager:
             return "-- INSERT --"
         elif self.current_mode == Mode.VISUAL:
             return "-- VISUAL --"
+        elif self.current_mode == Mode.VISUAL_LINE:
+            return "-- VISUAL LINE --"
         elif self.command_buffer.startswith('/') or self.command_buffer.startswith('?'):
             return self.command_buffer
         elif self.command_buffer:

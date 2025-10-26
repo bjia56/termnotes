@@ -248,10 +248,18 @@ class EditorUI:
 
         # Check if in visual mode and get selection range
         in_visual_mode = self.mode_manager.is_visual_mode()
+        in_visual_line_mode = self.mode_manager.is_visual_line_mode()
+
         if in_visual_mode:
             start_row, start_col, end_row, end_col = self.mode_manager.get_visual_selection(
                 self.buffer.cursor_row, self.buffer.cursor_col
             )
+        elif in_visual_line_mode:
+            # For visual line mode, get full line range
+            start_row, end_row = self.mode_manager.get_visual_line_selection(self.buffer.cursor_row)
+            start_col = 0
+            # For line mode, we want to select to end of line, using a large number
+            end_col = float('inf')
         else:
             start_row = start_col = end_row = end_col = -1
 
@@ -289,7 +297,7 @@ class EditorUI:
                         formatted_line = self._highlight_code_line(block_line, lang)
 
                     # Add cursor/selection if needed
-                    if in_visual_mode:
+                    if in_visual_mode or in_visual_line_mode:
                         # Apply visual selection highlighting
                         line_with_selection = self._add_visual_selection_to_line(
                             formatted_line, block_i, start_row, start_col, end_row, end_col,
@@ -330,7 +338,7 @@ class EditorUI:
                 # Regular markdown line
                 formatted_line = self._parse_markdown_line(line)
 
-                if in_visual_mode:
+                if in_visual_mode or in_visual_line_mode:
                     # Apply visual selection highlighting
                     line_with_selection = self._add_visual_selection_to_line(
                         formatted_line, i, start_row, start_col, end_row, end_col,
