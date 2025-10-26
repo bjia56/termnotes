@@ -215,6 +215,24 @@ def create_key_bindings(
             mode_manager.set_message("Nothing in register to paste")
         mode_manager.clear_command_buffer()
 
+    @kb.add('u', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
+    def undo_change(event):
+        """Undo the last change"""
+        if buffer.undo(ui.editor_window_height):
+            mode_manager.clear_message()
+        else:
+            mode_manager.set_message("Already at oldest change")
+        mode_manager.clear_command_buffer()
+
+    @kb.add('c-r', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
+    def redo_change(event):
+        """Redo the last undone change"""
+        if buffer.redo(ui.editor_window_height):
+            mode_manager.clear_message()
+        else:
+            mode_manager.set_message("Already at newest change")
+        mode_manager.clear_command_buffer()
+
     @kb.add('v', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
     def enter_visual_mode(event):
         """Enter visual mode"""

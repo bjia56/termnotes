@@ -2,8 +2,9 @@
 Editor buffer and main editor class
 """
 
-from typing import List
+from typing import List, Optional, Tuple
 from enum import Enum
+from dataclasses import dataclass
 
 
 class Mode(Enum):
@@ -12,6 +13,112 @@ class Mode(Enum):
     INSERT = "INSERT"
     VISUAL = "VISUAL"
     VISUAL_LINE = "VISUAL_LINE"
+
+
+class ChangeType(Enum):
+    """Types of changes that can be recorded for undo"""
+    INSERT_CHAR = "insert_char"
+    DELETE_CHAR = "delete_char"
+    BACKSPACE = "backspace"
+    INSERT_NEWLINE = "insert_newline"
+    DELETE_LINE = "delete_line"
+    DELETE_SELECTION = "delete_selection"
+    DELETE_LINES = "delete_lines"
+    PASTE_TEXT = "paste_text"
+
+
+@dataclass
+class Change:
+    """Represents a single change to the buffer"""
+    type: ChangeType
+    row: int
+    col: int
+    text: str = ""  # Text inserted or deleted
+    lines_deleted: Optional[List[str]] = None  # Lines deleted (for multi-line ops)
+    cursor_pos_before: Optional[Tuple[int, int]] = None  # Cursor position before change
+    cursor_pos_after: Optional[Tuple[int, int]] = None  # Cursor position after change
+    # For delete_selection
+    end_row: Optional[int] = None
+    end_col: Optional[int] = None
+
+
+class UndoManager:
+    """Manages undo/redo history with linear stack"""
+
+    def __init__(self, max_history: int = 1000):
+        """
+        Initialize the undo manager
+
+        Args:
+            max_history: Maximum number of undo blocks to keep in history
+        """
+        self.history: List[List[Change]] = []  # List of change blocks
+        self.current_index: int = -1  # Current position in history (-1 = no history)
+        self.max_history: int = max_history
+
+    def can_undo(self) -> bool:
+        """Check if undo is possible"""
+        return self.current_index >= 0
+
+    def can_redo(self) -> bool:
+        """Check if redo is possible"""
+        return self.current_index < len(self.history) - 1
+
+    def add_change_block(self, changes: List[Change]):
+        """
+        Add a new change block to history
+
+        Args:
+            changes: List of changes to add as a single undo block
+        """
+        if not changes:
+            return
+
+        # If we're not at the end of history, truncate future changes
+        # (user made new change after undoing, so redo stack is cleared)
+        if self.current_index < len(self.history) - 1:
+            self.history = self.history[:self.current_index + 1]
+
+        # Add the new change block
+        self.history.append(changes)
+        self.current_index += 1
+
+        # Limit history size
+        if len(self.history) > self.max_history:
+            self.history.pop(0)
+            self.current_index -= 1
+
+    def get_undo_block(self) -> Optional[List[Change]]:
+        """
+        Get the next change block to undo
+
+        Returns:
+            List of changes to undo, or None if nothing to undo
+        """
+        if not self.can_undo():
+            return None
+
+        block = self.history[self.current_index]
+        self.current_index -= 1
+        return block
+
+    def get_redo_block(self) -> Optional[List[Change]]:
+        """
+        Get the next change block to redo
+
+        Returns:
+            List of changes to redo, or None if nothing to redo
+        """
+        if not self.can_redo():
+            return None
+
+        self.current_index += 1
+        return self.history[self.current_index]
+
+    def clear(self):
+        """Clear all undo/redo history"""
+        self.history = []
+        self.current_index = -1
 
 
 class EditorBuffer:
@@ -34,6 +141,7 @@ class EditorBuffer:
         self.mode_manager = mode_manager  # Reference to mode manager for mode-aware cursor behavior
         self.yank_register: str = ""  # Store yanked text for paste operations
         self.yank_is_linewise: bool = False  # Track if yanked text is line-wise or character-wise
+        self.undo_manager: UndoManager = UndoManager()  # Undo/redo manager
 
     @property
     def current_line(self) -> str:
@@ -199,6 +307,8 @@ class EditorBuffer:
         self.current_note_id = note_id
         self.is_dirty = False
         self.is_new_unsaved = is_new
+        # Clear undo history when loading new content
+        self.undo_manager.clear()
 
     # Cursor movement
     def move_cursor_left(self):
@@ -353,11 +463,24 @@ class EditorBuffer:
     # Text modification
     def insert_char(self, char: str):
         """Insert a character at cursor position"""
+        # Record change for undo
+        change = Change(
+            type=ChangeType.INSERT_CHAR,
+            row=self.cursor_row,
+            col=self.cursor_col,
+            text=char,
+            cursor_pos_before=(self.cursor_row, self.cursor_col)
+        )
+
         line = self.lines[self.cursor_row]
         self.lines[self.cursor_row] = (
             line[:self.cursor_col] + char + line[self.cursor_col:]
         )
         self.cursor_col += 1
+
+        change.cursor_pos_after = (self.cursor_row, self.cursor_col)
+        self.undo_manager.add_change_block([change])
+
         self.mark_dirty()
 
     def paste_text(self, text: str, visible_height: int = None):
@@ -370,6 +493,15 @@ class EditorBuffer:
         """
         if not text:
             return
+
+        # Record change for undo
+        change = Change(
+            type=ChangeType.PASTE_TEXT,
+            row=self.cursor_row,
+            col=self.cursor_col,
+            text=text,
+            cursor_pos_before=(self.cursor_row, self.cursor_col)
+        )
 
         # Split pasted text into lines
         paste_lines = text.split('\n')
@@ -402,6 +534,9 @@ class EditorBuffer:
             self.cursor_row += len(paste_lines) - 1
             self.cursor_col = len(paste_lines[-1])
 
+        change.cursor_pos_after = (self.cursor_row, self.cursor_col)
+        self.undo_manager.add_change_block([change])
+
         self.mark_dirty()
 
         # Adjust scroll if visible_height provided
@@ -412,38 +547,98 @@ class EditorBuffer:
         """Delete character at cursor position"""
         line = self.lines[self.cursor_row]
         if self.cursor_col < len(line):
+            deleted_char = line[self.cursor_col]
+
+            # Record change for undo
+            change = Change(
+                type=ChangeType.DELETE_CHAR,
+                row=self.cursor_row,
+                col=self.cursor_col,
+                text=deleted_char,
+                cursor_pos_before=(self.cursor_row, self.cursor_col)
+            )
+
             self.lines[self.cursor_row] = (
                 line[:self.cursor_col] + line[self.cursor_col + 1:]
             )
+
+            change.cursor_pos_after = (self.cursor_row, self.cursor_col)
+            self.undo_manager.add_change_block([change])
+
             self.mark_dirty()
 
     def backspace(self):
         """Delete character before cursor"""
         if self.cursor_col > 0:
             line = self.lines[self.cursor_row]
+            deleted_char = line[self.cursor_col - 1]
+
+            # Record change for undo
+            change = Change(
+                type=ChangeType.BACKSPACE,
+                row=self.cursor_row,
+                col=self.cursor_col - 1,
+                text=deleted_char,
+                cursor_pos_before=(self.cursor_row, self.cursor_col)
+            )
+
             self.lines[self.cursor_row] = (
                 line[:self.cursor_col - 1] + line[self.cursor_col:]
             )
             self.cursor_col -= 1
+
+            change.cursor_pos_after = (self.cursor_row, self.cursor_col)
+            self.undo_manager.add_change_block([change])
+
             self.mark_dirty()
         elif self.cursor_row > 0:
             # Join with previous line
             prev_line = self.lines[self.cursor_row - 1]
             current_line = self.lines[self.cursor_row]
-            self.cursor_col = len(prev_line)
+            new_cursor_col = len(prev_line)
+
+            # Record change for undo (backspace at line start = delete newline)
+            change = Change(
+                type=ChangeType.BACKSPACE,
+                row=self.cursor_row - 1,
+                col=len(prev_line),
+                text="\n",  # Represent newline deletion
+                cursor_pos_before=(self.cursor_row, self.cursor_col),
+                lines_deleted=[current_line]  # Store current line for restoration
+            )
+
+            self.cursor_col = new_cursor_col
             self.lines[self.cursor_row - 1] = prev_line + current_line
             self.lines.pop(self.cursor_row)
             self.cursor_row -= 1
+
+            change.cursor_pos_after = (self.cursor_row, self.cursor_col)
+            self.undo_manager.add_change_block([change])
+
             self.mark_dirty()
 
     def insert_newline(self, visible_height: int = None):
         """Insert a new line at cursor position"""
         line = self.lines[self.cursor_row]
+
+        # Record change for undo
+        change = Change(
+            type=ChangeType.INSERT_NEWLINE,
+            row=self.cursor_row,
+            col=self.cursor_col,
+            text=line[self.cursor_col:],  # Store the part that moves to new line
+            cursor_pos_before=(self.cursor_row, self.cursor_col)
+        )
+
         # Split current line at cursor
         self.lines[self.cursor_row] = line[:self.cursor_col]
         self.lines.insert(self.cursor_row + 1, line[self.cursor_col:])
         self.cursor_row += 1
         self.cursor_col = 0
+
+        change.cursor_pos_after = (self.cursor_row, self.cursor_col)
+        self.undo_manager.add_change_block([change])
+
         self.mark_dirty()
         # Adjust scroll if visible_height provided
         if visible_height is not None:
@@ -451,6 +646,17 @@ class EditorBuffer:
 
     def delete_line(self):
         """Delete current line"""
+        deleted_line = self.lines[self.cursor_row]
+
+        # Record change for undo
+        change = Change(
+            type=ChangeType.DELETE_LINE,
+            row=self.cursor_row,
+            col=self.cursor_col,
+            cursor_pos_before=(self.cursor_row, self.cursor_col),
+            lines_deleted=[deleted_line]
+        )
+
         if len(self.lines) > 1:
             self.lines.pop(self.cursor_row)
             # Adjust cursor position
@@ -461,13 +667,30 @@ class EditorBuffer:
             # Don't delete the last line, just clear it
             self.lines[0] = ""
             self.cursor_col = 0
+
+        change.cursor_pos_after = (self.cursor_row, self.cursor_col)
+        self.undo_manager.add_change_block([change])
+
         self.mark_dirty()
 
     def insert_line_below(self, visible_height: int = None):
         """Insert a new empty line below current line"""
+        # Record change for undo
+        change = Change(
+            type=ChangeType.INSERT_NEWLINE,
+            row=self.cursor_row,
+            col=len(self.lines[self.cursor_row]),  # End of current line
+            text="",  # Empty line content
+            cursor_pos_before=(self.cursor_row, self.cursor_col)
+        )
+
         self.lines.insert(self.cursor_row + 1, "")
         self.cursor_row += 1
         self.cursor_col = 0
+
+        change.cursor_pos_after = (self.cursor_row, self.cursor_col)
+        self.undo_manager.add_change_block([change])
+
         self.mark_dirty()
         # Adjust scroll if visible_height provided
         if visible_height is not None:
@@ -475,8 +698,21 @@ class EditorBuffer:
 
     def insert_line_above(self, visible_height: int = None):
         """Insert a new empty line above current line"""
+        # Record change for undo
+        change = Change(
+            type=ChangeType.INSERT_NEWLINE,
+            row=self.cursor_row - 1 if self.cursor_row > 0 else 0,
+            col=len(self.lines[self.cursor_row - 1]) if self.cursor_row > 0 else 0,
+            text="",  # Empty line content
+            cursor_pos_before=(self.cursor_row, self.cursor_col)
+        )
+
         self.lines.insert(self.cursor_row, "")
         self.cursor_col = 0
+
+        change.cursor_pos_after = (self.cursor_row, self.cursor_col)
+        self.undo_manager.add_change_block([change])
+
         self.mark_dirty()
         # Adjust scroll if visible_height provided (cursor doesn't move down, but line inserted above)
         if visible_height is not None:
@@ -653,6 +889,20 @@ class EditorBuffer:
             end_col: Ending column of selection
             visible_height: Height of visible editor area for scroll adjustment
         """
+        # Get the deleted text for undo
+        deleted_text = self.get_selection_text(start_row, start_col, end_row, end_col)
+
+        # Record change for undo
+        change = Change(
+            type=ChangeType.DELETE_SELECTION,
+            row=start_row,
+            col=start_col,
+            text=deleted_text,
+            cursor_pos_before=(self.cursor_row, self.cursor_col),
+            end_row=end_row,
+            end_col=end_col
+        )
+
         if start_row == end_row:
             # Single line deletion
             line = self.lines[start_row]
@@ -678,6 +928,9 @@ class EditorBuffer:
 
         # Ensure cursor is in valid position
         self.cursor_col = min(self.cursor_col, self.get_max_cursor_col())
+
+        change.cursor_pos_after = (self.cursor_row, self.cursor_col)
+        self.undo_manager.add_change_block([change])
 
         self.mark_dirty()
 
@@ -754,6 +1007,19 @@ class EditorBuffer:
         # Store the lines for yanking
         self.yank_lines(start_row, end_row)
 
+        # Get deleted lines for undo
+        deleted_lines = self.lines[start_row:end_row + 1].copy()
+
+        # Record change for undo
+        change = Change(
+            type=ChangeType.DELETE_LINES,
+            row=start_row,
+            col=self.cursor_col,
+            cursor_pos_before=(self.cursor_row, self.cursor_col),
+            lines_deleted=deleted_lines,
+            end_row=end_row
+        )
+
         # Delete the lines
         del self.lines[start_row:end_row + 1]
 
@@ -768,8 +1034,267 @@ class EditorBuffer:
         # Ensure cursor is in valid position
         self.cursor_col = min(self.cursor_col, self.get_max_cursor_col())
 
+        change.cursor_pos_after = (self.cursor_row, self.cursor_col)
+        self.undo_manager.add_change_block([change])
+
         self.mark_dirty()
 
         # Adjust scroll if visible_height provided
         if visible_height is not None:
             self.adjust_scroll(visible_height)
+
+    # Undo/Redo operations
+    def undo(self, visible_height: int = None) -> bool:
+        """
+        Undo the last change
+
+        Args:
+            visible_height: Height of visible editor area for scroll adjustment
+
+        Returns:
+            True if undo was performed, False if nothing to undo
+        """
+        change_block = self.undo_manager.get_undo_block()
+        if not change_block:
+            return False
+
+        # Apply changes in reverse order
+        for change in reversed(change_block):
+            self._undo_change(change)
+
+        # Restore cursor position from first change in block
+        if change_block and change_block[0].cursor_pos_before:
+            self.cursor_row, self.cursor_col = change_block[0].cursor_pos_before
+
+        # Adjust scroll if visible_height provided
+        if visible_height is not None:
+            self.adjust_scroll(visible_height)
+
+        self.mark_dirty()
+        return True
+
+    def redo(self, visible_height: int = None) -> bool:
+        """
+        Redo the last undone change
+
+        Args:
+            visible_height: Height of visible editor area for scroll adjustment
+
+        Returns:
+            True if redo was performed, False if nothing to redo
+        """
+        change_block = self.undo_manager.get_redo_block()
+        if not change_block:
+            return False
+
+        # Apply changes in forward order
+        for change in change_block:
+            self._redo_change(change)
+
+        # Restore cursor position from last change in block
+        if change_block and change_block[-1].cursor_pos_after:
+            self.cursor_row, self.cursor_col = change_block[-1].cursor_pos_after
+
+        # Adjust scroll if visible_height provided
+        if visible_height is not None:
+            self.adjust_scroll(visible_height)
+
+        self.mark_dirty()
+        return True
+
+    def _undo_change(self, change: Change):
+        """
+        Undo a single change (inverse operation)
+
+        Args:
+            change: The change to undo
+        """
+        if change.type == ChangeType.INSERT_CHAR:
+            # Undo insert: delete the character
+            line = self.lines[change.row]
+            self.lines[change.row] = line[:change.col] + line[change.col + 1:]
+
+        elif change.type == ChangeType.DELETE_CHAR:
+            # Undo delete: insert the character back
+            line = self.lines[change.row]
+            self.lines[change.row] = line[:change.col] + change.text + line[change.col:]
+
+        elif change.type == ChangeType.BACKSPACE:
+            if change.text == "\n":
+                # Undo backspace at line start: split the line back
+                line = self.lines[change.row]
+                self.lines[change.row] = line[:change.col]
+                if change.lines_deleted:
+                    self.lines.insert(change.row + 1, change.lines_deleted[0])
+            else:
+                # Undo backspace: insert the character back
+                line = self.lines[change.row]
+                self.lines[change.row] = line[:change.col] + change.text + line[change.col:]
+
+        elif change.type == ChangeType.INSERT_NEWLINE:
+            # Undo newline: join the lines back
+            if change.row + 1 < len(self.lines):
+                line = self.lines[change.row]
+                next_line = self.lines[change.row + 1]
+                self.lines[change.row] = line + change.text
+                self.lines.pop(change.row + 1)
+
+        elif change.type == ChangeType.DELETE_LINE:
+            # Undo delete line: restore the line
+            if change.lines_deleted:
+                if len(self.lines) == 1 and self.lines[0] == "":
+                    # If buffer only has empty line, replace it
+                    self.lines[0] = change.lines_deleted[0]
+                else:
+                    self.lines.insert(change.row, change.lines_deleted[0])
+
+        elif change.type == ChangeType.DELETE_SELECTION:
+            # Undo delete selection: restore the text
+            self._restore_text_at_position(change.row, change.col, change.text)
+
+        elif change.type == ChangeType.DELETE_LINES:
+            # Undo delete lines: restore all deleted lines
+            if change.lines_deleted:
+                for i, line in enumerate(change.lines_deleted):
+                    self.lines.insert(change.row + i, line)
+                # Remove empty line if it was added
+                if len(self.lines) > len(change.lines_deleted) and self.lines[-1] == "" and change.end_row is not None:
+                    if change.end_row - change.row + 1 == len(change.lines_deleted):
+                        # Check if last line should be removed (was added when buffer became empty)
+                        pass
+
+        elif change.type == ChangeType.PASTE_TEXT:
+            # Undo paste: delete the pasted text
+            paste_lines = change.text.split('\n')
+            if len(paste_lines) == 1:
+                # Single line paste - remove from current line
+                line = self.lines[change.row]
+                self.lines[change.row] = line[:change.col] + line[change.col + len(change.text):]
+            else:
+                # Multi-line paste - remove inserted lines
+                # Restore original line
+                current_line = self.lines[change.row]
+                end_row = change.row + len(paste_lines) - 1
+                last_line = self.lines[end_row] if end_row < len(self.lines) else ""
+
+                # Get original content before and after paste
+                before_paste = current_line[:change.col]
+                after_paste = last_line[len(paste_lines[-1]):]
+
+                # Remove all pasted lines
+                del self.lines[change.row:end_row + 1]
+
+                # Insert original line back
+                self.lines.insert(change.row, before_paste + after_paste)
+
+    def _redo_change(self, change: Change):
+        """
+        Redo a single change (re-apply operation)
+
+        Args:
+            change: The change to redo
+        """
+        if change.type == ChangeType.INSERT_CHAR:
+            # Redo insert: insert the character
+            line = self.lines[change.row]
+            self.lines[change.row] = line[:change.col] + change.text + line[change.col:]
+
+        elif change.type == ChangeType.DELETE_CHAR:
+            # Redo delete: delete the character
+            line = self.lines[change.row]
+            self.lines[change.row] = line[:change.col] + line[change.col + 1:]
+
+        elif change.type == ChangeType.BACKSPACE:
+            if change.text == "\n":
+                # Redo backspace at line start: join lines
+                if change.row + 1 < len(self.lines):
+                    prev_line = self.lines[change.row]
+                    current_line = self.lines[change.row + 1]
+                    self.lines[change.row] = prev_line + current_line
+                    self.lines.pop(change.row + 1)
+            else:
+                # Redo backspace: delete the character
+                line = self.lines[change.row]
+                self.lines[change.row] = line[:change.col] + line[change.col + 1:]
+
+        elif change.type == ChangeType.INSERT_NEWLINE:
+            # Redo newline: split the line
+            line = self.lines[change.row]
+            self.lines[change.row] = line[:change.col]
+            self.lines.insert(change.row + 1, change.text)
+
+        elif change.type == ChangeType.DELETE_LINE:
+            # Redo delete line: delete the line again
+            if len(self.lines) > 1:
+                self.lines.pop(change.row)
+            else:
+                self.lines[0] = ""
+
+        elif change.type == ChangeType.DELETE_SELECTION:
+            # Redo delete selection: delete the text again
+            if change.end_row is not None and change.end_col is not None:
+                start_row, start_col = change.row, change.col
+                end_row, end_col = change.end_row, change.end_col
+
+                if start_row == end_row:
+                    line = self.lines[start_row]
+                    self.lines[start_row] = line[:start_col] + line[end_col + 1:]
+                else:
+                    first_line_before = self.lines[start_row][:start_col]
+                    last_line_after = self.lines[end_row][end_col + 1:]
+                    combined_line = first_line_before + last_line_after
+                    del self.lines[start_row:end_row + 1]
+                    self.lines.insert(start_row, combined_line)
+
+        elif change.type == ChangeType.DELETE_LINES:
+            # Redo delete lines: delete the lines again
+            if change.end_row is not None:
+                del self.lines[change.row:change.end_row + 1]
+                if not self.lines:
+                    self.lines = [""]
+
+        elif change.type == ChangeType.PASTE_TEXT:
+            # Redo paste: paste the text again
+            paste_lines = change.text.split('\n')
+            if len(paste_lines) == 1:
+                line = self.lines[change.row]
+                self.lines[change.row] = line[:change.col] + change.text + line[change.col:]
+            else:
+                current_line = self.lines[change.row]
+                before_cursor = current_line[:change.col]
+                after_cursor = current_line[change.col:]
+
+                self.lines[change.row] = before_cursor + paste_lines[0]
+
+                for i, line in enumerate(paste_lines[1:-1], start=1):
+                    self.lines.insert(change.row + i, line)
+
+                final_line_content = paste_lines[-1] + after_cursor
+                self.lines.insert(change.row + len(paste_lines) - 1, final_line_content)
+
+    def _restore_text_at_position(self, row: int, col: int, text: str):
+        """
+        Restore text at a specific position (for undo of deletions)
+
+        Args:
+            row: Row to restore text at
+            col: Column to restore text at
+            text: Text to restore
+        """
+        text_lines = text.split('\n')
+        if len(text_lines) == 1:
+            # Single line restore
+            line = self.lines[row]
+            self.lines[row] = line[:col] + text + line[col:]
+        else:
+            # Multi-line restore
+            current_line = self.lines[row]
+            before = current_line[:col]
+            after = current_line[col:]
+
+            self.lines[row] = before + text_lines[0]
+
+            for i, line in enumerate(text_lines[1:-1], start=1):
+                self.lines.insert(row + i, line)
+
+            self.lines.insert(row + len(text_lines) - 1, text_lines[-1] + after)
