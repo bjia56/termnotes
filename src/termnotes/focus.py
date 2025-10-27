@@ -22,6 +22,7 @@ class FocusManager:
             initial_focus: Which pane should have focus initially
         """
         self.current_focus = initial_focus
+        self.sidebar_visible = True
 
     def is_sidebar_focused(self) -> bool:
         """Check if sidebar has focus"""
@@ -33,6 +34,7 @@ class FocusManager:
 
     def switch_to_sidebar(self):
         """Switch focus to sidebar"""
+        self.ensure_sidebar_visible()
         self.current_focus = FocusState.SIDEBAR
 
     def switch_to_editor(self):
@@ -49,3 +51,14 @@ class FocusManager:
     def get_focus_name(self) -> str:
         """Get name of currently focused pane for display"""
         return self.current_focus.value
+
+    def toggle_sidebar(self):
+        """Toggle sidebar visibility"""
+        self.sidebar_visible = not self.sidebar_visible
+        # If hiding sidebar while it has focus, switch to editor
+        if not self.sidebar_visible and self.is_sidebar_focused():
+            self.switch_to_editor()
+
+    def ensure_sidebar_visible(self):
+        """Ensure sidebar is visible (used when switching focus to it)"""
+        self.sidebar_visible = True

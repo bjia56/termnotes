@@ -4,8 +4,9 @@ UI components using prompt_toolkit
 
 import re
 from prompt_toolkit.application import Application
-from prompt_toolkit.layout import Layout, HSplit, VSplit, Window, FormattedTextControl
+from prompt_toolkit.layout import Layout, HSplit, VSplit, Window, FormattedTextControl, ConditionalContainer
 from prompt_toolkit.formatted_text import FormattedText
+from prompt_toolkit.filters import Condition
 from pygments import lex
 from pygments.lexers import get_lexer_by_name
 from pygments.lexers.special import TextLexer
@@ -672,8 +673,11 @@ class EditorUI:
         try:
             import shutil
             terminal_width = shutil.get_terminal_size().columns
-            # Subtract sidebar (30 columns)
-            self.editor_window_width = max(1, terminal_width - 30)
+            # Subtract sidebar (30 columns) only if it's visible
+            if self.focus_manager.sidebar_visible:
+                self.editor_window_width = max(1, terminal_width - 30)
+            else:
+                self.editor_window_width = max(1, terminal_width)
         except:
             self.editor_window_width = 80  # Default fallback
 
@@ -683,14 +687,17 @@ class EditorUI:
         self.update_editor_window_height()
 
         # Sidebar window (note list)
-        sidebar_window = Window(
-            content=FormattedTextControl(
-                text=self.get_sidebar_content,
-                focusable=False,
-                show_cursor=False,
+        sidebar_window = ConditionalContainer(
+            Window(
+                content=FormattedTextControl(
+                    text=self.get_sidebar_content,
+                    focusable=False,
+                    show_cursor=False,
+                ),
+                width=30,  # Fixed width for sidebar
+                wrap_lines=False,
             ),
-            width=30,  # Fixed width for sidebar
-            wrap_lines=False,
+            filter=Condition(lambda: self.focus_manager.sidebar_visible)
         )
 
         # Main editor window

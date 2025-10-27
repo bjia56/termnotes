@@ -430,6 +430,14 @@ def create_key_bindings(
             else:
                 mode_manager.set_message("No note loaded")
             mode_manager.clear_command_buffer()
+        elif command == ':sidebar' or command == ':sb':
+            # Toggle sidebar visibility (only when editor is focused)
+            if focus_manager.is_editor_focused():
+                focus_manager.toggle_sidebar()
+                mode_manager.clear_command_buffer()
+            else:
+                mode_manager.set_message("Sidebar toggle only available when editor is focused")
+                mode_manager.clear_command_buffer()
         else:
             mode_manager.set_message(f"Unknown command: {command}")
             mode_manager.clear_command_buffer()
