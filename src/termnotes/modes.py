@@ -15,6 +15,9 @@ class ModeManager:
         self.search_query = ""  # Current search query
         self.last_search = ""  # Last executed search for n command
         self.last_search_direction = "forward"  # Direction of last search: "forward" or "backward"
+        # Visual mode state
+        self.visual_start_row = 0  # Starting row of visual selection
+        self.visual_start_col = 0  # Starting column of visual selection
 
     def set_mode(self, mode: Mode):
         """Change the current mode"""
@@ -29,6 +32,18 @@ class ModeManager:
         """Check if in insert mode"""
         return self.current_mode == Mode.INSERT
 
+    def is_visual_mode(self) -> bool:
+        """Check if in visual mode (character-wise)"""
+        return self.current_mode == Mode.VISUAL
+
+    def is_visual_line_mode(self) -> bool:
+        """Check if in visual line mode"""
+        return self.current_mode == Mode.VISUAL_LINE
+
+    def is_any_visual_mode(self) -> bool:
+        """Check if in any visual mode (character or line)"""
+        return self.current_mode in (Mode.VISUAL, Mode.VISUAL_LINE)
+
     def enter_insert_mode(self):
         """Enter insert mode"""
         self.set_mode(Mode.INSERT)
@@ -36,6 +51,69 @@ class ModeManager:
     def enter_normal_mode(self):
         """Enter normal mode"""
         self.set_mode(Mode.NORMAL)
+
+    def enter_visual_mode(self, start_row: int, start_col: int):
+        """
+        Enter visual mode with the given starting position
+
+        Args:
+            start_row: Starting row of the selection
+            start_col: Starting column of the selection
+        """
+        self.current_mode = Mode.VISUAL
+        self.visual_start_row = start_row
+        self.visual_start_col = start_col
+        self.command_buffer = ""
+
+    def enter_visual_line_mode(self, start_row: int):
+        """
+        Enter visual line mode with the given starting row
+
+        Args:
+            start_row: Starting row of the selection
+        """
+        self.current_mode = Mode.VISUAL_LINE
+        self.visual_start_row = start_row
+        self.visual_start_col = 0  # Not used in line mode, but set for consistency
+        self.command_buffer = ""
+
+    def get_visual_selection(self, current_row: int, current_col: int):
+        """
+        Get the visual selection range, normalized so start is before end
+
+        Args:
+            current_row: Current cursor row
+            current_col: Current cursor column
+
+        Returns:
+            Tuple of (start_row, start_col, end_row, end_col) where start is always before end
+        """
+        # Normalize selection so start is always before end
+        if self.visual_start_row < current_row:
+            return (self.visual_start_row, self.visual_start_col, current_row, current_col)
+        elif self.visual_start_row > current_row:
+            return (current_row, current_col, self.visual_start_row, self.visual_start_col)
+        else:
+            # Same row
+            if self.visual_start_col <= current_col:
+                return (self.visual_start_row, self.visual_start_col, current_row, current_col)
+            else:
+                return (current_row, current_col, self.visual_start_row, self.visual_start_col)
+
+    def get_visual_line_selection(self, current_row: int):
+        """
+        Get the visual line selection range (entire lines)
+
+        Args:
+            current_row: Current cursor row
+
+        Returns:
+            Tuple of (start_row, end_row) where start is always before end
+        """
+        if self.visual_start_row <= current_row:
+            return (self.visual_start_row, current_row)
+        else:
+            return (current_row, self.visual_start_row)
 
     def add_to_command_buffer(self, char: str):
         """Add a character to the command buffer (for multi-key commands)"""
@@ -57,6 +135,10 @@ class ModeManager:
         """Get display string for current mode"""
         if self.current_mode == Mode.INSERT:
             return "-- INSERT --"
+        elif self.current_mode == Mode.VISUAL:
+            return "-- VISUAL --"
+        elif self.current_mode == Mode.VISUAL_LINE:
+            return "-- VISUAL LINE --"
         elif self.command_buffer.startswith('/') or self.command_buffer.startswith('?'):
             return self.command_buffer
         elif self.command_buffer:

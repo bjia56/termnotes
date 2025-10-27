@@ -247,6 +247,23 @@ class EditorUI:
         # Only show cursor if editor is focused
         show_cursor = self.focus_manager.is_editor_focused()
 
+        # Check if in visual mode and get selection range
+        in_visual_mode = self.mode_manager.is_visual_mode()
+        in_visual_line_mode = self.mode_manager.is_visual_line_mode()
+
+        if in_visual_mode:
+            start_row, start_col, end_row, end_col = self.mode_manager.get_visual_selection(
+                self.buffer.cursor_row, self.buffer.cursor_col
+            )
+        elif in_visual_line_mode:
+            # For visual line mode, get full line range
+            start_row, end_row = self.mode_manager.get_visual_line_selection(self.buffer.cursor_row)
+            start_col = 0
+            # For line mode, we want to select to end of line, using a large number
+            end_col = float('inf')
+        else:
+            start_row = start_col = end_row = end_col = -1
+
         # Calculate visible line range based on scroll offset
         visible_start = self.buffer.scroll_offset
         visible_end = min(visible_start + self.editor_window_height, len(lines))
@@ -280,8 +297,21 @@ class EditorUI:
                         # Code content - use Pygments
                         formatted_line = self._highlight_code_line(block_line, lang)
 
-                    # Add cursor if needed
-                    if block_i == self.buffer.cursor_row and show_cursor:
+                    # Add cursor/selection if needed
+                    if in_visual_mode or in_visual_line_mode:
+                        # Apply visual selection highlighting
+                        line_with_selection = self._add_visual_selection_to_line(
+                            formatted_line, block_i, start_row, start_col, end_row, end_col,
+                            self.buffer.cursor_col, show_cursor
+                        )
+                        # Apply horizontal scrolling
+                        scrolled_line = self._apply_horizontal_scroll(
+                            line_with_selection,
+                            self.buffer.horizontal_scroll_offset,
+                            self.buffer.horizontal_scroll_offset + self.editor_window_width
+                        )
+                        result.extend(scrolled_line)
+                    elif block_i == self.buffer.cursor_row and show_cursor:
                         line_with_cursor = self._add_cursor_to_formatted_line(formatted_line, self.buffer.cursor_col)
                         # Apply horizontal scrolling
                         scrolled_line = self._apply_horizontal_scroll(
@@ -309,7 +339,20 @@ class EditorUI:
                 # Regular markdown line
                 formatted_line = self._parse_markdown_line(line)
 
-                if i == self.buffer.cursor_row and show_cursor:
+                if in_visual_mode or in_visual_line_mode:
+                    # Apply visual selection highlighting
+                    line_with_selection = self._add_visual_selection_to_line(
+                        formatted_line, i, start_row, start_col, end_row, end_col,
+                        self.buffer.cursor_col, show_cursor
+                    )
+                    # Apply horizontal scrolling
+                    scrolled_line = self._apply_horizontal_scroll(
+                        line_with_selection,
+                        self.buffer.horizontal_scroll_offset,
+                        self.buffer.horizontal_scroll_offset + self.editor_window_width
+                    )
+                    result.extend(scrolled_line)
+                elif i == self.buffer.cursor_row and show_cursor:
                     line_with_cursor = self._add_cursor_to_formatted_line(formatted_line, self.buffer.cursor_col)
                     # Apply horizontal scrolling
                     scrolled_line = self._apply_horizontal_scroll(
@@ -572,6 +615,92 @@ class EditorUI:
         # If cursor is at end of line, add a reversed space
         if not cursor_added:
             result.append(('reverse', ' '))
+
+        return result
+
+    def _add_visual_selection_to_line(self, formatted_segments, line_num: int, start_row: int, start_col: int, end_row: int, end_col: int, cursor_col: int, show_cursor: bool):
+        """
+        Add visual selection highlighting to a formatted line
+
+        Args:
+            formatted_segments: list of (style, text) tuples
+            line_num: Current line number
+            start_row, start_col: Selection start position
+            end_row, end_col: Selection end position
+            cursor_col: Cursor column position
+            show_cursor: Whether to show cursor
+
+        Returns:
+            list of (style, text) tuples with selection highlighting
+        """
+        result = []
+        char_pos = 0
+
+        # Determine selection range for this line
+        if line_num < start_row or line_num > end_row:
+            # Line is not in selection
+            if show_cursor and line_num == self.buffer.cursor_row:
+                return self._add_cursor_to_formatted_line(formatted_segments, cursor_col)
+            return formatted_segments
+
+        # Line is in selection - determine start and end columns
+        if line_num == start_row and line_num == end_row:
+            # Selection on single line
+            sel_start = start_col
+            sel_end = end_col
+        elif line_num == start_row:
+            # First line of multi-line selection
+            sel_start = start_col
+            sel_end = float('inf')  # To end of line
+        elif line_num == end_row:
+            # Last line of multi-line selection
+            sel_start = 0
+            sel_end = end_col
+        else:
+            # Middle line of multi-line selection
+            sel_start = 0
+            sel_end = float('inf')  # Entire line
+
+        # Process each segment and apply selection highlighting
+        for style, text in formatted_segments:
+            text_len = len(text)
+            segment_start = char_pos
+            segment_end = char_pos + text_len
+
+            # Check overlap with selection
+            if segment_end <= sel_start or segment_start > sel_end:
+                # Segment is entirely outside selection
+                result.append((style, text))
+            elif segment_start >= sel_start and segment_end <= sel_end:
+                # Segment is entirely inside selection
+                result.append(('bg:#44475a', text))
+            else:
+                # Segment is partially selected - split it
+                for i, ch in enumerate(text):
+                    ch_pos = segment_start + i
+                    if sel_start <= ch_pos <= sel_end:
+                        # Character is selected
+                        if show_cursor and ch_pos == cursor_col and line_num == self.buffer.cursor_row:
+                            # This is where cursor is
+                            result.append(('reverse', ch))
+                        else:
+                            result.append(('bg:#44475a', ch))
+                    else:
+                        # Character not selected
+                        if show_cursor and ch_pos == cursor_col and line_num == self.buffer.cursor_row:
+                            # This is where cursor is
+                            result.append(('reverse', ch))
+                        else:
+                            result.append((style, ch))
+
+            char_pos = segment_end
+
+        # Add cursor at end if needed
+        if show_cursor and line_num == self.buffer.cursor_row and cursor_col >= char_pos:
+            if sel_start <= cursor_col <= sel_end:
+                result.append(('reverse bg:#44475a', ' '))
+            else:
+                result.append(('reverse', ' '))
 
         return result
 
