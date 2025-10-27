@@ -98,10 +98,9 @@ class NoteListManager:
         self.search_matches = []
         all_notes = self.get_all_notes_including_memory()
 
-        # Find all notes containing the query (case-insensitive)
-        query_lower = query.lower()
+        # Find all notes containing the query (case-sensitive)
         for i, note in enumerate(all_notes):
-            if query_lower in note.content.lower():
+            if query in note.content:
                 self.search_matches.append(i)
 
         if self.search_matches:
