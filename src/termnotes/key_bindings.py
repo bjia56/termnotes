@@ -48,20 +48,24 @@ def create_key_bindings(
 
     @kb.add('enter', filter=is_sidebar_focused & is_normal_mode)
     def sidebar_select_note(event):
-        """Select note and load into editor"""
+        """Select note and load into editor (keep focus on sidebar)"""
         selected_note = note_list_manager.selected_note
         if selected_note:
             # Use UI's load_note which checks for unsaved changes
             ui.load_note(selected_note)
-            # Switch focus to editor if load was successful
-            if not buffer.is_dirty or buffer.current_note_id == selected_note.id:
-                focus_manager.switch_to_editor()
+            # Keep focus on sidebar
 
     @kb.add('o', filter=is_sidebar_focused & is_normal_mode)
     def sidebar_create_note(event):
         """Create a new empty note from sidebar, focus editor, and enter Insert mode"""
         ui.create_new_note()
         # Enter Insert mode after creating the note
+        mode_manager.enter_insert_mode()
+
+    @kb.add('i', filter=is_sidebar_focused & is_normal_mode)
+    def sidebar_switch_to_insert(event):
+        """Switch focus to editor and enter insert mode"""
+        focus_manager.switch_to_editor()
         mode_manager.enter_insert_mode()
 
     @kb.add('d', filter=is_sidebar_focused & is_normal_mode & ~is_command_mode)
