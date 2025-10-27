@@ -233,6 +233,23 @@ def create_key_bindings(
             mode_manager.set_message("Already at newest change")
         mode_manager.clear_command_buffer()
 
+    @kb.add('g', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
+    def handle_g_key(event):
+        """Handle first 'g' in gg sequence for jump to top"""
+        if mode_manager.command_buffer == 'g':
+            # Second 'g' pressed - jump to top
+            buffer.jump_to_top(ui.editor_window_height)
+            mode_manager.clear_command_buffer()
+        else:
+            # First 'g' pressed
+            mode_manager.add_to_command_buffer('g')
+
+    @kb.add('G', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
+    def jump_to_bottom_key(event):
+        """Jump to bottom of file (vim G)"""
+        buffer.jump_to_bottom(ui.editor_window_height)
+        mode_manager.clear_command_buffer()
+
     @kb.add('v', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
     def enter_visual_mode(event):
         """Enter visual mode"""
@@ -373,6 +390,23 @@ def create_key_bindings(
         """Scroll up one page in visual mode"""
         buffer.page_up(ui.editor_window_height)
 
+    @kb.add('g', filter=is_editor_focused & is_visual_mode)
+    def visual_handle_g_key(event):
+        """Handle first 'g' in gg sequence for jump to top in visual mode"""
+        if mode_manager.command_buffer == 'g':
+            # Second 'g' pressed - jump to top
+            buffer.jump_to_top(ui.editor_window_height)
+            mode_manager.clear_command_buffer()
+        else:
+            # First 'g' pressed
+            mode_manager.add_to_command_buffer('g')
+
+    @kb.add('G', filter=is_editor_focused & is_visual_mode)
+    def visual_jump_to_bottom(event):
+        """Jump to bottom of file in visual mode"""
+        buffer.jump_to_bottom(ui.editor_window_height)
+        mode_manager.clear_command_buffer()
+
     # Visual mode operations
     @kb.add('d', filter=is_editor_focused & is_visual_mode)
     @kb.add('x', filter=is_editor_focused & is_visual_mode)
@@ -448,6 +482,23 @@ def create_key_bindings(
     def visual_line_page_up(event):
         """Scroll up one page in visual line mode"""
         buffer.page_up(ui.editor_window_height)
+
+    @kb.add('g', filter=is_editor_focused & is_visual_line_mode)
+    def visual_line_handle_g_key(event):
+        """Handle first 'g' in gg sequence for jump to top in visual line mode"""
+        if mode_manager.command_buffer == 'g':
+            # Second 'g' pressed - jump to top
+            buffer.jump_to_top(ui.editor_window_height)
+            mode_manager.clear_command_buffer()
+        else:
+            # First 'g' pressed
+            mode_manager.add_to_command_buffer('g')
+
+    @kb.add('G', filter=is_editor_focused & is_visual_line_mode)
+    def visual_line_jump_to_bottom(event):
+        """Jump to bottom of file in visual line mode"""
+        buffer.jump_to_bottom(ui.editor_window_height)
+        mode_manager.clear_command_buffer()
 
     # Visual line mode operations
     @kb.add('d', filter=is_editor_focused & is_visual_line_mode)

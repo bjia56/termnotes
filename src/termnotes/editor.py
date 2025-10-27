@@ -350,6 +350,24 @@ class EditorBuffer:
         """Move cursor to end of line"""
         self.cursor_col = self.get_max_cursor_col()
 
+    def jump_to_top(self, visible_height: int = None):
+        """Jump to the first line of the file (vim gg)"""
+        self.cursor_row = 0
+        self.cursor_col = 0
+        if visible_height is not None:
+            self.adjust_scroll(visible_height)
+
+    def jump_to_bottom(self, visible_height: int = None):
+        """Jump to the last line of the file (vim G)"""
+        if self.lines:
+            self.cursor_row = len(self.lines) - 1
+            self.cursor_col = 0
+        else:
+            self.cursor_row = 0
+            self.cursor_col = 0
+        if visible_height is not None:
+            self.adjust_scroll(visible_height)
+
     def page_down(self, visible_height: int):
         """Move cursor down by one page (vim Ctrl+F behavior)"""
         if visible_height <= 0:
