@@ -190,6 +190,7 @@ def create_key_bindings(
         mode_manager.clear_command_buffer()
 
     @kb.add('x', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
+    @kb.add('delete', filter=is_editor_focused & is_normal_mode & ~is_command_mode & ~is_search_mode)
     def delete_char(event):
         """Delete character under cursor"""
         buffer.delete_char_at_cursor()
@@ -797,6 +798,11 @@ def create_key_bindings(
     def insert_move_end(event):
         """Move to end of line in insert mode"""
         buffer.move_cursor_to_line_end()
+
+    @kb.add('delete', filter=is_editor_focused & is_insert_mode)
+    def insert_delete_char(event):
+        """Delete character under cursor in insert mode"""
+        buffer.delete_char_at_cursor()
 
     # Catch all printable characters in insert mode
     @kb.add('<any>', filter=is_editor_focused & is_insert_mode)
