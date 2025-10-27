@@ -804,6 +804,16 @@ def create_key_bindings(
         """Delete character under cursor in insert mode"""
         buffer.delete_char_at_cursor()
 
+    @kb.add('pagedown', filter=is_editor_focused & is_insert_mode)
+    def insert_page_down(event):
+        """Scroll down one page in insert mode"""
+        buffer.page_down(ui.editor_window_height)
+
+    @kb.add('pageup', filter=is_editor_focused & is_insert_mode)
+    def insert_page_up(event):
+        """Scroll up one page in insert mode"""
+        buffer.page_up(ui.editor_window_height)
+
     # Catch all printable characters in insert mode
     @kb.add('<any>', filter=is_editor_focused & is_insert_mode)
     def insert_character(event):
