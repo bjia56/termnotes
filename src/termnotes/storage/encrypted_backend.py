@@ -29,7 +29,7 @@ class EncryptedBackend(StorageBackend):
     NONCE_SIZE = 12  # ChaCha20-Poly1305 uses 96-bit (12-byte) nonces
     SALT_SIZE = 16   # 128-bit salt for PBKDF2
 
-    def __init__(self, backend: StorageBackend, password: Union[str, bytes]):
+    def __init__(self, backend: StorageBackend, password: Union[str, bytes], auto_migrate: bool = True):
         """
         Initialize encrypted backend
 
@@ -38,6 +38,7 @@ class EncryptedBackend(StorageBackend):
             password: Password/passphrase of any length (string or bytes)
                      Will be converted to 32-byte key via PBKDF2
                      Salt is derived from the password itself
+            auto_migrate: If True, automatically encrypt unencrypted notes on init
 
         Raises:
             ValueError: If password is invalid
@@ -55,6 +56,10 @@ class EncryptedBackend(StorageBackend):
             self.cipher = ChaCha20Poly1305(encryption_key)
         except Exception as e:
             raise ValueError(f"Invalid encryption key: {e}")
+
+        # Migrate unencrypted notes if requested
+        if auto_migrate:
+            self._migrate_unencrypted_notes()
 
     @staticmethod
     def _derive_salt(password: Union[str, bytes]) -> bytes:
@@ -289,6 +294,65 @@ class EncryptedBackend(StorageBackend):
     def close(self):
         """Clean up underlying backend resources"""
         self.backend.close()
+
+    def _migrate_unencrypted_notes(self):
+        """
+        Migrate unencrypted notes to encrypted format
+
+        Checks all notes in the underlying backend. For any note that doesn't
+        have the 'encrypted' property set to True, encrypts it in place.
+
+        This is useful when:
+        - Switching from unencrypted to encrypted storage
+        - Recovering from partial encryption failures
+        """
+        try:
+            # Get all notes directly from backend (bypassing our encryption layer)
+            all_notes = self.backend.get_all_notes()
+
+            unencrypted_count = 0
+            migrated_notes = []
+
+            for note in all_notes:
+                # Check if note is already encrypted
+                if note.get_property("encrypted") == True:
+                    continue
+
+                # Note is unencrypted - encrypt it
+                unencrypted_count += 1
+
+                # Encrypt the content
+                encrypted_content = self._encrypt_content(note.content)
+
+                # Add encryption metadata
+                encrypted_properties = note.properties.copy()
+                encrypted_properties["encrypted"] = True
+                encrypted_properties["encryption_method"] = "chacha20poly1305-pbkdf2"
+
+                # Create encrypted note
+                encrypted_note = Note(
+                    note_id=note.id,
+                    content=encrypted_content,
+                    created_at=note.created_at,
+                    updated_at=note.updated_at,
+                    properties=encrypted_properties
+                )
+
+                migrated_notes.append(encrypted_note)
+
+            # Save all encrypted notes
+            for encrypted_note in migrated_notes:
+                self.backend.save_note(encrypted_note)
+
+            if unencrypted_count > 0:
+                print(f"✓ Migrated {unencrypted_count} unencrypted note(s) to encrypted storage")
+                print("Press Enter to continue...")
+                input()
+
+        except Exception as e:
+            print(f"Warning: Failed to migrate notes: {e}")
+            print("Press Enter to continue...")
+            input()
 
     @staticmethod
     def generate_passphrase(num_words: int = 6, delimiter: str = "-") -> str:
