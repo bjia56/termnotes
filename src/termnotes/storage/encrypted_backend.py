@@ -181,11 +181,18 @@ class EncryptedBackend(StorageBackend):
         for note in encrypted_notes:
             try:
                 decrypted_content = self._decrypt_content(note.content)
+
+                # Strip encryption metadata from properties when decrypting
+                decrypted_properties = note.properties.copy()
+                decrypted_properties.pop("encrypted", None)
+                decrypted_properties.pop("encryption_method", None)
+
                 decrypted_note = Note(
                     note_id=note.id,
                     content=decrypted_content,
                     created_at=note.created_at,
-                    updated_at=note.updated_at
+                    updated_at=note.updated_at,
+                    properties=decrypted_properties
                 )
                 decrypted_notes.append(decrypted_note)
             except Exception as e:
@@ -197,7 +204,8 @@ class EncryptedBackend(StorageBackend):
                     note_id=note.id,
                     content=f"[DECRYPTION FAILED: {str(e)}]",
                     created_at=note.created_at,
-                    updated_at=note.updated_at
+                    updated_at=note.updated_at,
+                    properties=note.properties
                 )
                 decrypted_notes.append(error_note)
 
@@ -220,11 +228,18 @@ class EncryptedBackend(StorageBackend):
 
         try:
             decrypted_content = self._decrypt_content(encrypted_note.content)
+
+            # Strip encryption metadata from properties when decrypting
+            decrypted_properties = encrypted_note.properties.copy()
+            decrypted_properties.pop("encrypted", None)
+            decrypted_properties.pop("encryption_method", None)
+
             return Note(
                 note_id=encrypted_note.id,
                 content=decrypted_content,
                 created_at=encrypted_note.created_at,
-                updated_at=encrypted_note.updated_at
+                updated_at=encrypted_note.updated_at,
+                properties=decrypted_properties
             )
         except Exception as e:
             # Return note with error marker if decryption fails
@@ -233,7 +248,8 @@ class EncryptedBackend(StorageBackend):
                 note_id=encrypted_note.id,
                 content=f"[DECRYPTION FAILED: {str(e)}]",
                 created_at=encrypted_note.created_at,
-                updated_at=encrypted_note.updated_at
+                updated_at=encrypted_note.updated_at,
+                properties=encrypted_note.properties
             )
 
     def save_note(self, note: Note):
@@ -245,11 +261,18 @@ class EncryptedBackend(StorageBackend):
         """
         encrypted_content = self._encrypt_content(note.content)
 
+        # Create encrypted note with properties
+        # Copy properties and mark as encrypted
+        encrypted_properties = note.properties.copy()
+        encrypted_properties["encrypted"] = True
+        encrypted_properties["encryption_method"] = "chacha20poly1305-pbkdf2"
+
         encrypted_note = Note(
             note_id=note.id,
             content=encrypted_content,
             created_at=note.created_at,
-            updated_at=note.updated_at
+            updated_at=note.updated_at,
+            properties=encrypted_properties
         )
 
         self.backend.save_note(encrypted_note)

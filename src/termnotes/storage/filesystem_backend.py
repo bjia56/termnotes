@@ -91,7 +91,8 @@ class FilesystemBackend(StorageBackend):
             "id": note.id,
             "content": note.content,
             "created_at": note.created_at.isoformat(),
-            "updated_at": note.updated_at.isoformat()
+            "updated_at": note.updated_at.isoformat(),
+            "properties": note.properties
         }
 
     def _note_from_dict(self, data: dict) -> Note:
@@ -100,5 +101,6 @@ class FilesystemBackend(StorageBackend):
             note_id=data["id"],
             content=data["content"],
             created_at=datetime.fromisoformat(data["created_at"]),
-            updated_at=datetime.fromisoformat(data["updated_at"])
+            updated_at=datetime.fromisoformat(data["updated_at"]),
+            properties=data.get("properties", {})
         )

@@ -2,6 +2,7 @@
 SQLite-based note storage backend
 """
 
+import json
 import sqlite3
 from pathlib import Path
 from typing import List, Optional
@@ -39,7 +40,8 @@ class SQLiteBackend(StorageBackend):
                 id TEXT PRIMARY KEY,
                 content TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                properties TEXT DEFAULT '{}'
             )
         """)
         self.conn.commit()
@@ -48,7 +50,7 @@ class SQLiteBackend(StorageBackend):
         """Get all notes from the database"""
         cursor = self.conn.cursor()
         cursor.execute("""
-            SELECT id, content, created_at, updated_at
+            SELECT id, content, created_at, updated_at, properties
             FROM notes
             ORDER BY updated_at DESC
         """)
@@ -58,7 +60,8 @@ class SQLiteBackend(StorageBackend):
                 note_id=row[0],
                 content=row[1],
                 created_at=self._parse_timestamp(row[2]),
-                updated_at=self._parse_timestamp(row[3])
+                updated_at=self._parse_timestamp(row[3]),
+                properties=self._parse_properties(row[4])
             )
             for row in rows
         ]
@@ -67,7 +70,7 @@ class SQLiteBackend(StorageBackend):
         """Get a specific note by ID"""
         cursor = self.conn.cursor()
         cursor.execute(
-            "SELECT id, content, created_at, updated_at FROM notes WHERE id = ?",
+            "SELECT id, content, created_at, updated_at, properties FROM notes WHERE id = ?",
             (note_id,)
         )
         row = cursor.fetchone()
@@ -76,20 +79,23 @@ class SQLiteBackend(StorageBackend):
                 note_id=row[0],
                 content=row[1],
                 created_at=self._parse_timestamp(row[2]),
-                updated_at=self._parse_timestamp(row[3])
+                updated_at=self._parse_timestamp(row[3]),
+                properties=self._parse_properties(row[4])
             )
         return None
 
     def save_note(self, note: Note):
         """Save or update a note"""
         cursor = self.conn.cursor()
+        properties_json = json.dumps(note.properties)
         cursor.execute("""
-            INSERT INTO notes (id, content, created_at, updated_at)
-            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+            INSERT INTO notes (id, content, created_at, updated_at, properties)
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?)
             ON CONFLICT(id) DO UPDATE SET
                 content = excluded.content,
-                updated_at = CURRENT_TIMESTAMP
-        """, (note.id, note.content, note.created_at))
+                updated_at = CURRENT_TIMESTAMP,
+                properties = excluded.properties
+        """, (note.id, note.content, note.created_at, properties_json))
         self.conn.commit()
 
     def delete_note(self, note_id: str):
@@ -108,3 +114,12 @@ class SQLiteBackend(StorageBackend):
             return datetime.fromisoformat(ts_str)
         except (ValueError, TypeError):
             return utc_now()
+
+    def _parse_properties(self, props_str: str) -> dict:
+        """Parse JSON properties string to dictionary"""
+        if not props_str:
+            return {}
+        try:
+            return json.loads(props_str)
+        except (json.JSONDecodeError, TypeError):
+            return {}
