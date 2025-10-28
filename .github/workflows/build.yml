@@ -37,7 +37,10 @@ jobs:
           python -m pip wheel --no-deps .
 
           mkdir target
-          pip install --target=./target --implementation py --platform any --abi none --only-binary=:all: ./termnotes-*.whl
+
+          # We're adding piwheels as an extra index-url to grab pre-built
+          # python-only wheels for packages that only provide source distributions.
+          pip install --extra-index-url https://www.piwheels.org/simple --target=./target --implementation py --platform any --abi none --only-binary=:all: ./termnotes-*.whl
 
           folders=$(ls target)
 

@@ -11,6 +11,7 @@ class Config:
 
     def __init__(self):
         self._config: Dict[str, Any] = {}
+        self._config_path: Optional[Path] = None
         self._load_config()
 
     def _get_config_paths(self) -> list[Path]:
@@ -39,12 +40,15 @@ class Config:
                 try:
                     with open(path, "rb") as f:
                         self._config = tomllib.load(f)
+                    self._config_path = path
                     return
                 except Exception as e:
                     print(f"Warning: Failed to load config from {path}: {e}")
 
         # No config found, use defaults
         self._config = self._get_defaults()
+        # Use default config path for saving
+        self._config_path = self._get_config_paths()[1]  # XDG config dir
 
     def _get_defaults(self) -> Dict[str, Any]:
         """Get default configuration."""
@@ -61,6 +65,10 @@ class Config:
                 },
                 "filesystem": {
                     "directory": "~/.local/share/termnotes/notes/"
+                },
+                "encrypted": {
+                    "wraps": "filesystem",
+                    "key_file": "~/.config/termnotes/encryption.key"
                 }
             }
         }
@@ -113,6 +121,21 @@ class Config:
         )
         return self._expand_path(path)
 
+    @property
+    def encrypted_wraps(self) -> str:
+        """Get the backend that encryption wraps."""
+        return self._config.get("storage", {}).get("encrypted", {}).get(
+            "wraps", "filesystem"
+        )
+
+    @property
+    def encrypted_key_file(self) -> str:
+        """Get the encryption key file path."""
+        path = self._config.get("storage", {}).get("encrypted", {}).get(
+            "key_file", "~/.config/termnotes/encryption.key"
+        )
+        return self._expand_path(path)
+
 
 # Global config instance
 _config: Optional[Config] = None
@@ -135,7 +158,7 @@ def get_example_config() -> str:
 #   - ./termnotes.toml (in your working directory)
 
 [storage]
-# Backend type: "sqlite", "gdrive", or "filesystem"
+# Backend type: "sqlite", "gdrive", "filesystem", or "encrypted"
 backend = "sqlite"
 
 # SQLite backend configuration
@@ -163,4 +186,19 @@ folder_name = "termnotes"
 # Directory to store note files as JSON
 # Default: ~/.local/share/termnotes/notes/
 directory = "~/.local/share/termnotes/notes/"
+
+# Encrypted backend configuration (wraps another backend)
+[storage.encrypted]
+# Backend to wrap with encryption: "sqlite", "gdrive", or "filesystem"
+wraps = "filesystem"
+
+# Path to store passphrase (auto-generated if not exists)
+# File contains: passphrase string (UTF-8 text)
+# Salt is derived from passphrase using BLAKE2b (no need to store it)
+# Default: ~/.config/termnotes/encryption.key
+key_file = "~/.config/termnotes/encryption.key"
+
+# Note: On first run, a random memorable passphrase will be generated
+# using xkcdpass (e.g., "correct-horse-battery-staple-random-words")
+# Only the passphrase is stored; salt is derived deterministically.
 """
