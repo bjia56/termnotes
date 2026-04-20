@@ -5,6 +5,8 @@ UI components using prompt_toolkit
 import re
 from prompt_toolkit.application import Application
 from prompt_toolkit.layout import Layout, HSplit, VSplit, Window, FormattedTextControl, ConditionalContainer
+from prompt_toolkit.widgets import Frame
+from prompt_toolkit.widgets.base import Border
 from prompt_toolkit.formatted_text import FormattedText
 from prompt_toolkit.filters import Condition
 from pygments import lex
@@ -20,6 +22,15 @@ from .note_list import NoteListManager
 from .focus import FocusManager
 from .storage import create_default_storage
 from .note import Note
+
+
+# Use rounded box-drawing characters for pane borders.
+Border.TOP_LEFT = "╭"
+Border.TOP_RIGHT = "╮"
+Border.BOTTOM_LEFT = "╰"
+Border.BOTTOM_RIGHT = "╯"
+Border.HORIZONTAL = "─"
+Border.VERTICAL = "│"
 
 
 class EditorUI:
@@ -792,8 +803,8 @@ class EditorUI:
         try:
             import shutil
             terminal_height = shutil.get_terminal_size().lines
-            # Subtract status bar (1 line)
-            self.editor_window_height = max(1, terminal_height - 1)
+            # Subtract status bar (1 line) + editor frame borders (2 lines)
+            self.editor_window_height = max(1, terminal_height - 3)
         except:
             self.editor_window_height = 24  # Default fallback
 
@@ -802,11 +813,11 @@ class EditorUI:
         try:
             import shutil
             terminal_width = shutil.get_terminal_size().columns
-            # Subtract sidebar (30 columns) only if it's visible
+            # Subtract sidebar frame (30 columns) only if visible, then editor frame (2 columns)
             if self.focus_manager.sidebar_visible:
-                self.editor_window_width = max(1, terminal_width - 30)
+                self.editor_window_width = max(1, terminal_width - 32)
             else:
-                self.editor_window_width = max(1, terminal_width)
+                self.editor_window_width = max(1, terminal_width - 2)
         except:
             self.editor_window_width = 80  # Default fallback
 
@@ -816,21 +827,26 @@ class EditorUI:
         self.update_editor_window_height()
 
         # Sidebar window (note list)
+        sidebar_body = Window(
+            content=FormattedTextControl(
+                text=self.get_sidebar_content,
+                focusable=False,
+                show_cursor=False,
+            ),
+            width=28,  # Frame width (30) minus 2 border columns
+            wrap_lines=False,
+        )
+
         sidebar_window = ConditionalContainer(
-            Window(
-                content=FormattedTextControl(
-                    text=self.get_sidebar_content,
-                    focusable=False,
-                    show_cursor=False,
-                ),
-                width=30,  # Fixed width for sidebar
-                wrap_lines=False,
+            Frame(
+                body=sidebar_body,
+                width=30,
             ),
             filter=Condition(lambda: self.focus_manager.sidebar_visible)
         )
 
         # Main editor window
-        editor_window = Window(
+        editor_body = Window(
             content=FormattedTextControl(
                 text=self.get_text_content,
                 focusable=False,
@@ -838,6 +854,8 @@ class EditorUI:
             ),
             wrap_lines=False,
         )
+
+        editor_window = Frame(body=editor_body)
 
         # Status bar
         status_bar = Window(
